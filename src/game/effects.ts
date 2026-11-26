@@ -86,6 +86,7 @@ export class EffectsManager {
   public recentGoldTimer = 0;
   public recentXpDelta = 0;
   public recentXpTimer = 0;
+  public levelUpBanner: { level: number; timer: number; maxTimer: number } | null = null;
 
   public reset(): void {
     this.particles = [];
@@ -106,6 +107,31 @@ export class EffectsManager {
     this.recentGoldTimer = 0;
     this.recentXpDelta = 0;
     this.recentXpTimer = 0;
+    this.levelUpBanner = null;
+  }
+
+  public spawnLevelUp(newLevel: number): void {
+    this.levelUpBanner = { level: newLevel, timer: 2.3, maxTimer: 2.3 };
+    this.xpPulse = 1.4;
+    this.addFlash('#7be3ff', 0.28);
+    this.vignetteColor = '#ffd740';
+    this.vignetteAlpha = Math.max(this.vignetteAlpha, 0.3);
+    for (let i = 0; i < 14; i++) {
+      const dur = 0.55 + Math.random() * 0.4;
+      const angle = (i / 14) * Math.PI * 2;
+      this.hudFlyers.push({
+        startX: 640 + Math.cos(angle) * 40,
+        startY: 240 + Math.sin(angle) * 20,
+        targetX: 640 + Math.cos(angle) * (180 + Math.random() * 90),
+        targetY: 220 + Math.sin(angle) * (90 + Math.random() * 60),
+        arcHeight: 25 + Math.random() * 35,
+        color: i % 2 === 0 ? '#ffd740' : '#7be3ff',
+        size: 6,
+        life: dur,
+        maxLife: dur,
+        kind: i % 2 === 0 ? 'gold' : 'xp',
+      });
+    }
   }
 
   public spawnGoldGain(amount: number, fromX = 640, fromY = 340): void {
@@ -341,6 +367,10 @@ export class EffectsManager {
     if (this.recentXpTimer > 0) {
       this.recentXpTimer = Math.max(0, this.recentXpTimer - dt);
       if (this.recentXpTimer === 0) this.recentXpDelta = 0;
+    }
+    if (this.levelUpBanner) {
+      this.levelUpBanner.timer -= dt;
+      if (this.levelUpBanner.timer <= 0) this.levelUpBanner = null;
     }
 
     for (let i = this.hudPopups.length - 1; i >= 0; i--) {

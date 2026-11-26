@@ -341,6 +341,8 @@ export const UPGRADE_SPECS: UpgradeSpec[] = [
 export interface PlayerProgress {
   gold: number;
   xp: number;
+  level: number;
+  skillPoints: number;
   runCount: number;
   highestTierCleared: number;
   totalBossesDefeated: number;
@@ -350,6 +352,37 @@ export interface PlayerProgress {
   unlockedComboIds: string[];
   comboLevels: Record<string, number>;
   customCombos: ComboDefinition[];
+}
+
+/** Escalating XP required to advance from `level` to `level + 1`. */
+export function getXpForNextLevel(level: number): number {
+  const lv = Math.max(1, Math.floor(level));
+  return Math.round(120 * Math.pow(1.26, lv - 1) + (lv - 1) * 35);
+}
+
+/** Applies XP to PlayerProgress, advancing levels and granting 1 Upgrade Point per level earned. */
+export function applyXpGain(
+  progress: PlayerProgress,
+  amount: number
+): { leveledUp: boolean; levelsGained: number; newLevel: number } {
+  if (amount <= 0) {
+    return { leveledUp: false, levelsGained: 0, newLevel: progress.level };
+  }
+  progress.xp += amount;
+  let levelsGained = 0;
+  let needed = getXpForNextLevel(progress.level);
+  while (progress.xp >= needed) {
+    progress.xp -= needed;
+    progress.level += 1;
+    progress.skillPoints += 1;
+    levelsGained += 1;
+    needed = getXpForNextLevel(progress.level);
+  }
+  return {
+    leveledUp: levelsGained > 0,
+    levelsGained,
+    newLevel: progress.level,
+  };
 }
 
 export interface DerivedPlayerStats {
@@ -381,6 +414,8 @@ export function createDefaultProgress(): PlayerProgress {
   return {
     gold: 0,
     xp: 0,
+    level: 1,
+    skillPoints: 0,
     runCount: 1,
     highestTierCleared: 0,
     totalBossesDefeated: 0,
@@ -552,9 +587,11 @@ export function loadProgress(): PlayerProgress {
     if (!raw) return createDefaultProgress();
     const parsed = JSON.parse(raw) as Partial<PlayerProgress>;
     const def = createDefaultProgress();
-    return {
+    const merged: PlayerProgress = {
       ...def,
       ...parsed,
+      level: typeof parsed.level === 'number' && parsed.level >= 1 ? Math.floor(parsed.level) : 1,
+      skillPoints: typeof parsed.skillPoints === 'number' && parsed.skillPoints >= 0 ? Math.floor(parsed.skillPoints) : 0,
       upgrades: {
         ...def.upgrades,
         ...(parsed.upgrades ?? {}),
@@ -573,6 +610,13 @@ export function loadProgress(): PlayerProgress {
       },
       customCombos: Array.isArray(parsed.customCombos) ? parsed.customCombos : [],
     };
+    // Migrate legacy saves that stored raw unspent XP without a level
+    if (parsed.level === undefined && merged.xp >= getXpForNextLevel(1)) {
+      const legacyXp = merged.xp;
+      merged.xp = 0;
+      applyXpGain(merged, legacyXp);
+    }
+    return merged;
   } catch {
     return createDefaultProgress();
   }

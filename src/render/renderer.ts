@@ -5,7 +5,7 @@ import { renderBossPixelSprite } from './bossPixelSprites';
 import { renderRoadGuardianSprite } from './guardianPixelSprite';
 import { renderPetPixelSprite } from './petPixelSprite';
 import { renderBossAreaAttacks } from './bossAreaRenderer';
-import { isEverythingMaxed } from '../game/progression';
+import { getXpForNextLevel, isEverythingMaxed } from '../game/progression';
 import type { RoadsidePropKind } from '../game/runContent';
 
 export class GameRenderer {
@@ -1001,12 +1001,14 @@ export class GameRenderer {
     }
     ctx.restore();
 
-    // Animated XP Pill (right half of top row)
-    const xpScale = 1 + Math.sin(fx.xpPulse * Math.PI) * 0.1;
+    // Animated Level & XP Progress Pill (right half of top row)
+    const xpNeeded = getXpForNextLevel(engine.progress.level);
+    const xpRatio = Math.max(0, Math.min(1, engine.progress.xp / Math.max(1, xpNeeded)));
+    const xpScale = 1 + Math.sin(Math.min(1, fx.xpPulse) * Math.PI) * 0.1;
     ctx.save();
     ctx.translate(rx + plateW - 12 - pillW / 2, ry + 10 + pillH / 2);
     ctx.scale(xpScale, xpScale);
-    ctx.fillStyle = fx.xpPulse > 0.05 ? `rgba(123, 227, 255, ${0.14 + fx.xpPulse * 0.24})` : 'rgba(123, 227, 255, 0.1)';
+    ctx.fillStyle = fx.xpPulse > 0.05 ? `rgba(123, 227, 255, ${0.14 + Math.min(1, fx.xpPulse) * 0.24})` : 'rgba(123, 227, 255, 0.1)';
     ctx.beginPath();
     ctx.roundRect(-pillW / 2, -pillH / 2, pillW, pillH, 8);
     ctx.fill();
@@ -1017,23 +1019,38 @@ export class GameRenderer {
     // XP diamond/star icon
     ctx.fillStyle = '#7be3ff';
     ctx.beginPath();
-    ctx.moveTo(-pillW / 2 + 17, -8);
-    ctx.lineTo(-pillW / 2 + 24, 0);
-    ctx.lineTo(-pillW / 2 + 17, 8);
-    ctx.lineTo(-pillW / 2 + 10, 0);
+    ctx.moveTo(-pillW / 2 + 14, -9);
+    ctx.lineTo(-pillW / 2 + 20, -3);
+    ctx.lineTo(-pillW / 2 + 14, 3);
+    ctx.lineTo(-pillW / 2 + 8, -3);
     ctx.closePath();
     ctx.fill();
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#7be3ff';
-    ctx.font = '800 14px system-ui, sans-serif';
-    ctx.fillText(`${Math.round(this.displayXp)} XP`, -pillW / 2 + 30, 5);
+    ctx.font = '800 12px system-ui, sans-serif';
+    const spBadge = engine.progress.skillPoints > 0 ? ` ★${engine.progress.skillPoints}` : '';
+    ctx.fillText(`Lv.${engine.progress.level}${spBadge}`, -pillW / 2 + 25, 1);
+
+    ctx.textAlign = 'right';
     if (fx.recentXpTimer > 0 && fx.recentXpDelta > 0) {
-      ctx.textAlign = 'right';
       ctx.fillStyle = '#e0f7fa';
-      ctx.font = '800 11px system-ui, sans-serif';
-      ctx.fillText(`+${fx.recentXpDelta}`, pillW / 2 - 8, 4);
+      ctx.font = '800 10px system-ui, sans-serif';
+      ctx.fillText(`+${fx.recentXpDelta}`, pillW / 2 - 7, 1);
+    } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '700 9px system-ui, sans-serif';
+      ctx.fillText(`${engine.progress.xp}/${xpNeeded}`, pillW / 2 - 7, 1);
     }
+
+    // Mini XP progress bar along bottom of pill
+    const xpBarX = -pillW / 2 + 8;
+    const xpBarY = 7;
+    const xpBarW = pillW - 16;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(xpBarX, xpBarY, xpBarW, 5);
+    ctx.fillStyle = '#7be3ff';
+    ctx.fillRect(xpBarX, xpBarY, xpBarW * xpRatio, 5);
     ctx.restore();
 
     // Lower contextual info inside Bottom-Right Plate
@@ -1122,6 +1139,40 @@ export class GameRenderer {
       ctx.strokeText(pop.text, pop.x, pop.y);
       ctx.fillStyle = pop.color;
       ctx.fillText(pop.text, pop.x, pop.y);
+    }
+
+    // Celebratory LEVEL UP! Banner Animation
+    if (fx.levelUpBanner) {
+      const b = fx.levelUpBanner;
+      const elapsed = b.maxTimer - b.timer;
+      const enterT = Math.min(1, elapsed / 0.25);
+      const exitT = Math.min(1, b.timer / 0.4);
+      const alpha = Math.min(enterT, exitT);
+      const scale = 0.85 + Math.sin(enterT * Math.PI * 0.5) * 0.15;
+      const yPos = 195 - elapsed * 12;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(this.width * 0.5, yPos);
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.92)';
+      ctx.beginPath();
+      ctx.roundRect(-210, -34, 420, 68, 14);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd740';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd740';
+      ctx.font = '900 24px Georgia, serif';
+      ctx.fillText(`✦ LEVEL UP!  Lv.${b.level} ✦`, 0, -2);
+
+      ctx.fillStyle = '#69f0ae';
+      ctx.font = '800 13px system-ui, sans-serif';
+      ctx.fillText('+1 UPGRADE POINT EARNED (SPEND AT SANCTUARY)', 0, 20);
+      ctx.restore();
     }
 
     ctx.restore();

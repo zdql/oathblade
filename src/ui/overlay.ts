@@ -6,7 +6,7 @@ import {
   getComboUpgradeCosts,
   getMaxedUpgradeSummary,
   getUpgradeCost,
-  getUpgradeXpCost,
+  getXpForNextLevel,
   isEverythingMaxed,
   resetProgress,
   saveProgress,
@@ -150,8 +150,9 @@ export class UIOverlay {
           </div>
           <div style="text-align:center;font-size:13px;color:#94a3b8;">
             Run #${p.runCount} &nbsp;•&nbsp; Highest Tier Cleared: ${p.highestTierCleared}/${this.engine.gauntlet.length} &nbsp;•&nbsp;
-            <span class="currency-gold">${p.gold} Gold</span> &nbsp;•&nbsp;
-            <span class="currency-xp">${p.xp} XP</span>
+            <span class="currency-xp">Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span> &nbsp;•&nbsp;
+            <span style="color:#69f0ae;font-weight:700;">${p.skillPoints} Upgrade Pt${p.skillPoints === 1 ? '' : 's'}</span> &nbsp;•&nbsp;
+            <span class="currency-gold">${p.gold} Gold</span>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" data-action="start-run">Embark on the Trail</button>
@@ -306,8 +307,18 @@ export class UIOverlay {
             <div class="reward-pill reward-xp">
               <div class="reward-label">XP Earned This Run</div>
               <div class="reward-value currency-xp">+<span data-countup="${s.xpEarnedThisRun}">0</span> XP</div>
-              <div class="reward-total">Total XP: ${p.xp} XP</div>
+              <div class="reward-total">
+                Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)${s.levelsGainedThisRun > 0 ? ` • <strong style="color:#69f0ae;">+${s.levelsGainedThisRun} LVL UP!</strong>` : ''}
+              </div>
             </div>
+          </div>
+
+          <div style="margin:10px 0 4px;font-size:13px;color:${p.skillPoints > 0 ? '#69f0ae' : '#94a3b8'};font-weight:700;">
+            ${
+              p.skillPoints > 0
+                ? `★ ${p.skillPoints} Upgrade Point${p.skillPoints === 1 ? '' : 's'} ready to spend at the Sanctuary Forge!`
+                : `Earn ${getXpForNextLevel(p.level) - p.xp} more XP to reach Lv.${p.level + 1} and unlock your next Upgrade Point.`
+            }
           </div>
 
           <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
@@ -371,8 +382,7 @@ export class UIOverlay {
               const lvl = p.upgrades[u.id] ?? 0;
               const maxed = lvl >= u.maxLevel;
               const goldCost = getUpgradeCost(u.id, lvl);
-              const xpCost = getUpgradeXpCost(u.id, lvl);
-              const canAfford = p.gold >= goldCost && p.xp >= xpCost && !maxed;
+              const canAfford = p.gold >= goldCost && p.skillPoints >= 1 && !maxed;
               return `
                 <div class="shop-item">
                   <div>
@@ -382,7 +392,7 @@ export class UIOverlay {
                   </div>
                   <button class="btn ${canAfford ? 'btn-primary' : 'btn-secondary'} btn-sm"
                     data-buy-upgrade="${u.id}" ${canAfford ? '' : 'disabled'}>
-                    ${maxed ? 'MAXED' : `Upgrade (${goldCost}g + ${xpCost} XP)`}
+                    ${maxed ? 'MAXED' : `Upgrade (${goldCost}g + 1 LVL Pt)`}
                   </button>
                 </div>
               `;
@@ -399,14 +409,14 @@ export class UIOverlay {
             const equipped = p.activeStyleId === st.id;
             const maxed = lv >= st.maxLevel;
             const upCost = getStyleUpgradeCost(st, lv);
-            const canUnlock = !unlocked && p.xp >= st.unlockCostXp;
-            const canUpgrade = unlocked && !maxed && p.gold >= upCost;
+            const canUnlock = !unlocked && p.skillPoints >= 1;
+            const canUpgrade = unlocked && !maxed && p.gold >= upCost && p.skillPoints >= 1;
             return `
               <div class="shop-item" style="border-color:${equipped ? st.primaryColor : 'rgba(255,255,255,0.12)'};">
                 <div>
                   <h4>
                     <span style="color:${st.primaryColor}">${st.name}</span>
-                    <span style="font-size:11px;color:#cbd5e1;">${unlocked ? `Lv ${lv}/${st.maxLevel}` : `${st.unlockCostXp} XP`}</span>
+                    <span style="font-size:11px;color:#cbd5e1;">${unlocked ? `Lv ${lv}/${st.maxLevel}` : `1 LVL Pt`}</span>
                   </h4>
                   <p style="color:${st.secondaryColor};font-weight:600;margin-top:2px;">${st.tagline}</p>
                   <p style="margin-top:4px;">${st.description}</p>
@@ -415,14 +425,14 @@ export class UIOverlay {
                   ${
                     !unlocked
                       ? `<button class="btn ${canUnlock ? 'btn-primary' : 'btn-secondary'} btn-sm" data-unlock-style="${st.id}" ${canUnlock ? '' : 'disabled'}>
-                          Learn Style (${st.unlockCostXp} XP)
+                          Learn Style (1 LVL Pt)
                         </button>`
                       : `
                         <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} btn-sm" data-equip-style="${st.id}" ${equipped ? 'disabled' : ''}>
                           ${equipped ? 'Equipped' : 'Equip'}
                         </button>
                         <button class="btn ${canUpgrade ? 'btn-primary' : 'btn-secondary'} btn-sm" data-upgrade-style="${st.id}" ${canUpgrade ? '' : 'disabled'}>
-                          ${maxed ? 'MAX' : `Upgrade (${upCost}g)`}
+                          ${maxed ? 'MAX' : `Upgrade (${upCost}g + 1 LVL Pt)`}
                         </button>
                       `
                   }
@@ -443,14 +453,14 @@ export class UIOverlay {
               const lvMul = getComboLevelMultiplier(lv);
               const maxed = lv >= MAX_COMBO_LEVEL;
               const upCosts = getComboUpgradeCosts(c.xpCost, lv);
-              const canBuy = !unlocked && p.xp >= c.xpCost;
-              const canUpgrade = unlocked && !maxed && p.gold >= upCosts.gold && p.xp >= upCosts.xp;
+              const canBuy = !unlocked && p.skillPoints >= 1;
+              const canUpgrade = unlocked && !maxed && p.gold >= upCosts.gold && p.skillPoints >= 1;
               return `
                 <div class="shop-item">
                   <div>
                     <h4>
                       <span style="color:${c.accentColor}">${c.name}</span>
-                      <span style="font-size:11px;color:#cbd5e1;">${unlocked ? `Lv ${lv}/${MAX_COMBO_LEVEL}` : `${c.xpCost} XP`}</span>
+                      <span style="font-size:11px;color:#cbd5e1;">${unlocked ? `Lv ${lv}/${MAX_COMBO_LEVEL}` : `1 LVL Pt`}</span>
                     </h4>
                     <div class="seq-pills" style="margin:6px 0;">
                       ${c.sequence.map((k) => `<span class="seq-pill">${k}</span>`).join('')}
@@ -466,12 +476,12 @@ export class UIOverlay {
                       unlocked
                         ? `
                           <button class="btn ${canUpgrade ? 'btn-primary' : 'btn-secondary'} btn-sm" data-upgrade-combo="${c.id}" ${canUpgrade ? '' : 'disabled'}>
-                            ${maxed ? 'MAXED' : `Upgrade (${upCosts.gold}g + ${upCosts.xp} XP)`}
+                            ${maxed ? 'MAXED' : `Upgrade (${upCosts.gold}g + 1 LVL Pt)`}
                           </button>
                           ${c.isCustom ? `<button class="btn btn-danger btn-sm" data-delete-combo="${c.id}">Delete</button>` : ''}
                         `
                         : `<button class="btn ${canBuy ? 'btn-primary' : 'btn-secondary'} btn-sm" data-buy-combo="${c.id}" ${canBuy ? '' : 'disabled'}>
-                            Learn (${c.xpCost} XP)
+                            Learn (1 LVL Pt)
                           </button>`
                     }
                   </div>
@@ -546,9 +556,12 @@ export class UIOverlay {
               <div class="tape-tier">Campfire Sanctuary • Run #${p.runCount}</div>
               <div style="font-family:Georgia,serif;font-size:24px;color:#fff;">Forge &amp; Martial Training</div>
             </div>
-            <div class="currency-bar">
-              <span class="currency-gold">Gold: ${p.gold}</span>
-              <span class="currency-xp">XP: ${p.xp}</span>
+            <div class="currency-bar" style="align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+              <span class="currency-gold">Gold: ${p.gold}g</span>
+              <span class="currency-xp">Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span>
+              <span style="background:${p.skillPoints > 0 ? 'rgba(105,240,174,0.18)' : 'rgba(255,255,255,0.08)'};border:1px solid ${p.skillPoints > 0 ? '#69f0ae' : 'rgba(255,255,255,0.16)'};color:${p.skillPoints > 0 ? '#69f0ae' : '#94a3b8'};padding:4px 10px;border-radius:999px;font-size:13px;">
+                LVL Pts: ${p.skillPoints}
+              </span>
             </div>
           </div>
 
@@ -626,8 +639,8 @@ export class UIOverlay {
       el.addEventListener('click', () => {
         const id = el.dataset.unlockStyle as FightingStyleId;
         const spec = FIGHTING_STYLES.find((s) => s.id === id);
-        if (spec && (this.engine.progress.styleLevels[id] ?? 0) === 0 && this.engine.progress.xp >= spec.unlockCostXp) {
-          this.engine.progress.xp -= spec.unlockCostXp;
+        if (spec && (this.engine.progress.styleLevels[id] ?? 0) === 0 && this.engine.progress.skillPoints >= 1) {
+          this.engine.progress.skillPoints -= 1;
           this.engine.progress.styleLevels[id] = 1;
           this.engine.progress.activeStyleId = id;
           this.engine.syncStatsFromProgress();
@@ -652,8 +665,9 @@ export class UIOverlay {
         const lv = this.engine.progress.styleLevels[id] ?? 0;
         if (!spec || lv <= 0 || lv >= spec.maxLevel) return;
         const cost = getStyleUpgradeCost(spec, lv);
-        if (this.engine.progress.gold >= cost) {
+        if (this.engine.progress.gold >= cost && this.engine.progress.skillPoints >= 1) {
           this.engine.progress.gold -= cost;
+          this.engine.progress.skillPoints -= 1;
           this.engine.progress.styleLevels[id] = lv + 1;
           this.engine.syncStatsFromProgress();
         }
@@ -665,10 +679,9 @@ export class UIOverlay {
         const id = el.dataset.buyUpgrade as UpgradeId;
         const lvl = this.engine.progress.upgrades[id] ?? 0;
         const goldCost = getUpgradeCost(id, lvl);
-        const xpCost = getUpgradeXpCost(id, lvl);
-        if (this.engine.progress.gold >= goldCost && this.engine.progress.xp >= xpCost) {
+        if (this.engine.progress.gold >= goldCost && this.engine.progress.skillPoints >= 1) {
           this.engine.progress.gold -= goldCost;
-          this.engine.progress.xp -= xpCost;
+          this.engine.progress.skillPoints -= 1;
           this.engine.progress.upgrades[id] = lvl + 1;
           this.engine.syncStatsFromProgress();
         }
@@ -679,8 +692,8 @@ export class UIOverlay {
       el.addEventListener('click', () => {
         const id = el.dataset.buyCombo!;
         const combo = this.engine.combos.getAllCombos().find((c) => c.id === id);
-        if (combo && !this.engine.combos.isUnlocked(id) && this.engine.progress.xp >= combo.xpCost) {
-          this.engine.progress.xp -= combo.xpCost;
+        if (combo && !this.engine.combos.isUnlocked(id) && this.engine.progress.skillPoints >= 1) {
+          this.engine.progress.skillPoints -= 1;
           this.engine.combos.unlockCombo(id);
           this.engine.progress.unlockedComboIds = this.engine.combos.getUnlockedIds();
           this.engine.progress.comboLevels[id] = 1;
@@ -698,9 +711,9 @@ export class UIOverlay {
         const lv = Math.max(1, this.engine.progress.comboLevels?.[id] ?? 1);
         if (lv >= MAX_COMBO_LEVEL) return;
         const costs = getComboUpgradeCosts(combo.xpCost, lv);
-        if (this.engine.progress.gold >= costs.gold && this.engine.progress.xp >= costs.xp) {
+        if (this.engine.progress.gold >= costs.gold && this.engine.progress.skillPoints >= 1) {
           this.engine.progress.gold -= costs.gold;
-          this.engine.progress.xp -= costs.xp;
+          this.engine.progress.skillPoints -= 1;
           this.engine.progress.comboLevels[id] = lv + 1;
           saveProgress(this.engine.progress);
           this.render();

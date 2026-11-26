@@ -14,6 +14,7 @@ import {
 import { ComboEngine, type ComboDefinition, type ComboInput } from '../combos';
 import { generateGauntletRun, type BossInstance, type BossMove, type BossMoveStep } from '../bosses';
 import {
+  applyXpGain,
   computePlayerStats,
   getComboLevelMultiplier,
   loadProgress,
@@ -148,6 +149,7 @@ export interface RunSummary {
   minigamesWonThisRun: number;
   goldEarnedThisRun: number;
   xpEarnedThisRun: number;
+  levelsGainedThisRun: number;
   outcome: 'in_progress' | 'defeat' | 'victory';
   lastBossReward?: { gold: number; xp: number; bossName: string };
 }
@@ -237,6 +239,7 @@ export class GameEngine {
       minigamesWonThisRun: 0,
       goldEarnedThisRun: 0,
       xpEarnedThisRun: 0,
+      levelsGainedThisRun: 0,
       outcome: 'in_progress',
     };
 
@@ -349,9 +352,14 @@ export class GameEngine {
 
   private awardXp(amount: number, fromX = 640, fromY = 374): void {
     if (amount <= 0) return;
-    this.progress.xp += amount;
     this.runSummary.xpEarnedThisRun += amount;
+    const res = applyXpGain(this.progress, amount);
     this.effects.spawnXpGain(amount, fromX, fromY);
+    if (res.leveledUp) {
+      this.runSummary.levelsGainedThisRun += res.levelsGained;
+      this.effects.spawnLevelUp(res.newLevel);
+      this.sound.playVictory();
+    }
   }
 
   private healPlayer(amount: number, label?: string): number {
@@ -413,6 +421,7 @@ export class GameEngine {
       minigamesWonThisRun: 0,
       goldEarnedThisRun: 0,
       xpEarnedThisRun: 0,
+      levelsGainedThisRun: 0,
       outcome: 'in_progress',
     };
     this.player = this.createFreshPlayerCombatState();
