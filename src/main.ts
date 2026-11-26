@@ -20,6 +20,26 @@ function bootstrap(): void {
 
   engine.input.attach();
 
+  // Prevent iOS Safari double-tap-to-zoom and pinch-zoom during fast taps
+  let lastTouchEnd = 0;
+  document.addEventListener(
+    'touchend',
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastTouchEnd <= 320) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    },
+    { passive: false }
+  );
+  document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+
   let lastTime = performance.now();
   const frame = (now: number) => {
     const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
