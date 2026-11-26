@@ -513,7 +513,7 @@ export function computePlayerStats(progress: PlayerProgress, baseMoveSpeed: numb
         (1 + d('vitality') * 0.08) *
         maxedBonus
     ),
-    baseAttack: Math.round(rawAtk * styleAtkMul * maxedBonus),
+    baseAttack: Math.round(rawAtk * styleAtkMul * maxedBonus * 0.95),
     maxStamina: Math.round(100 + d('stamina') * 34),
     staminaRegen: 32 * (1 + d('stamina') * 0.16 + d('second_breath') * 0.14) * (style.id === 'gale' ? 1.18 : 1.0),
     parryWindowBonus: d('parry') * 0.02 + styleParrySec,

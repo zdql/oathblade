@@ -90,6 +90,7 @@ export interface PlayerCombatState {
   hitboxSpawned: boolean;
   dodgeCooldown: number;
   parryCooldown: number;
+  quickAttackCooldown: number;
   heavyAttackCooldown: number;
   counterWindowTimer: number;
   comboCount: number;
@@ -453,6 +454,7 @@ export class GameEngine {
       hitboxSpawned: false,
       dodgeCooldown: 0,
       parryCooldown: 0,
+      quickAttackCooldown: 0,
       heavyAttackCooldown: 0,
       counterWindowTimer: 0,
       comboCount: 0,
@@ -624,8 +626,8 @@ export class GameEngine {
       const quick = this.input.consumeAction('quick');
       const strong = !quick && this.pathHeavyCooldown <= 0 && this.input.consumeAction('strong');
       if (quick || strong) {
-        // Light attack = 0.5s duration; Heavy attack = ~2.0s delay!
-        this.pathAttackCooldown = strong ? 0.85 : 0.5;
+        // Light attack = 1.0s cooldown; Heavy attack = 2.0s delay!
+        this.pathAttackCooldown = strong ? 0.85 : 1.0;
         if (strong) this.pathHeavyCooldown = 2.0;
         this.player.swingDir *= -1;
         this.playerAnim.play(strong ? 'strong_cleave' : 'quick_slash', true, strong ? 0.85 : 0.5);
@@ -1051,6 +1053,9 @@ export class GameEngine {
 
     if (this.player.dodgeCooldown > 0) this.player.dodgeCooldown = Math.max(0, this.player.dodgeCooldown - dt);
     if (this.player.parryCooldown > 0) this.player.parryCooldown = Math.max(0, this.player.parryCooldown - dt);
+    if (this.player.quickAttackCooldown > 0) {
+      this.player.quickAttackCooldown = Math.max(0, this.player.quickAttackCooldown - dt);
+    }
     if (this.player.heavyAttackCooldown > 0) {
       this.player.heavyAttackCooldown = Math.max(0, this.player.heavyAttackCooldown - dt);
     }
@@ -1225,6 +1230,18 @@ export class GameEngine {
     }
 
     const isStrong = input === 'J';
+    if (!isStrong && p.quickAttackCooldown > 0) {
+      this.effects.spawnText(
+        this.playerBody.pos.x,
+        this.playerBody.pos.y,
+        46,
+        `QUICK CD (${p.quickAttackCooldown.toFixed(1)}s)`,
+        '#80deea',
+        0.78,
+        0.35
+      );
+      return;
+    }
     if (isStrong && p.heavyAttackCooldown > 0) {
       this.effects.spawnText(
         this.playerBody.pos.x,
@@ -1247,10 +1264,10 @@ export class GameEngine {
     p.activeCombo = null;
     p.state = 'windup';
     p.stateTimer = 0;
-    // Light attack = 0.50s total (0.12 windup + 0.12 active + 0.26 recovery)
-    // Heavy attack = ~2.0s delay between swings (0.36 windup + 0.16 active + 0.48 recovery + 2.0s cooldown)
+    // Light attack = 0.50s swing + 1.0s cooldown; Heavy attack = 1.0s swing + 2.0s cooldown
     p.stateDuration = isStrong ? 0.36 : 0.12;
     if (isStrong) p.heavyAttackCooldown = 2.0;
+    else p.quickAttackCooldown = 1.0;
     p.swingDir = p.swingDir * -1;
     this.playerAnim.play(isStrong ? 'strong_cleave' : 'quick_slash', true, isStrong ? 1.0 : 0.5);
     this.sound.playSwing(isStrong);
