@@ -1,4 +1,4 @@
-# Oathblade: Gauntlet of Five
+# Oathblade: Gauntlet of 10
 
 A **Legend of Zelda × Mike Tyson's Punch-Out!!** fantasy swordplay roguelite built in TypeScript + HTML5 Canvas with an **isolated, DOM-free physics engine**.
 

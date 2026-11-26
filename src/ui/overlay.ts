@@ -136,7 +136,7 @@ export class UIOverlay {
       <div class="overlay-screen">
         <div class="card">
           <div class="title-logo">OATHBLADE</div>
-          <div class="subtitle">Gauntlet of Ten — Fantasy Swordplay × Punch-Out!! Boss Duel Roguelite</div>
+          <div class="subtitle">Gauntlet of 10 — Fantasy Swordplay × Punch-Out!! Boss Duel Roguelite</div>
           <p style="text-align:center;color:#cbd5e1;font-size:14px;line-height:1.5;">
             Walk the perilous fantasy trail armed with nothing but forged steel, footwork, and instinct.
             Read each monster's telegraphs, parry or evade their strikes, unleash martial combos, and spend Gold &amp; XP at the Sanctuary after every fall.
