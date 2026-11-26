@@ -64,6 +64,7 @@ export type PlayerActionState =
   | 'active'
   | 'recovery'
   | 'dodge'
+  | 'dash'
   | 'parry'
   | 'hurt'
   | 'dead';
@@ -92,6 +93,9 @@ export interface PlayerCombatState {
   activeCombo: ComboDefinition | null;
   hitboxSpawned: boolean;
   dodgeCooldown: number;
+  dashCooldown: number;
+  dashDir: { x: number; y: number };
+  dashHitBoss: boolean;
   parryCooldown: number;
   quickAttackCooldown: number;
   heavyAttackCooldown: number;
@@ -202,6 +206,9 @@ export class GameEngine {
   public petAttackFlash = 0;
   public pathAttackCooldown = 0;
   public pathHeavyCooldown = 0;
+  public pathDashTimer = 0;
+  public pathDashCooldown = 0;
+  public pathDashDirX = 0;
   public pathDefenseTimer = 0;
   public pathDefenseMode: 'none' | 'parry' | 'dodge' = 'none';
   public activeRunBuffs: RunBuff[] = [];
@@ -267,6 +274,9 @@ export class GameEngine {
       this.stats.baseAttack
     );
     this.pathAttackCooldown = 0;
+    this.pathDashTimer = 0;
+    this.pathDashCooldown = 0;
+    this.pathDashDirX = 0;
     this.pathDefenseTimer = 0;
     this.pathDefenseMode = 'none';
   }
@@ -352,9 +362,10 @@ export class GameEngine {
 
   private awardXp(amount: number, fromX = 640, fromY = 374): void {
     if (amount <= 0) return;
-    this.runSummary.xpEarnedThisRun += amount;
-    const res = applyXpGain(this.progress, amount);
-    this.effects.spawnXpGain(amount, fromX, fromY);
+    const scaled = Math.max(1, Math.round(amount * 1.5));
+    this.runSummary.xpEarnedThisRun += scaled;
+    const res = applyXpGain(this.progress, scaled);
+    this.effects.spawnXpGain(scaled, fromX, fromY);
     if (res.leveledUp) {
       this.runSummary.levelsGainedThisRun += res.levelsGained;
       this.effects.spawnLevelUp(res.newLevel);
@@ -500,6 +511,9 @@ export class GameEngine {
       activeCombo: null,
       hitboxSpawned: false,
       dodgeCooldown: 0,
+      dashCooldown: 0,
+      dashDir: { x: 0, y: -1 },
+      dashHitBoss: false,
       parryCooldown: 0,
       quickAttackCooldown: 0,
       heavyAttackCooldown: 0,
@@ -641,6 +655,7 @@ export class GameEngine {
 
     if (this.pathAttackCooldown > 0) this.pathAttackCooldown = Math.max(0, this.pathAttackCooldown - dt);
     if (this.pathHeavyCooldown > 0) this.pathHeavyCooldown = Math.max(0, this.pathHeavyCooldown - dt);
+    if (this.pathDashCooldown > 0) this.pathDashCooldown = Math.max(0, this.pathDashCooldown - dt);
     if (this.pathDefenseTimer > 0) {
       this.pathDefenseTimer = Math.max(0, this.pathDefenseTimer - dt);
       if (this.pathDefenseTimer === 0) this.pathDefenseMode = 'none';
@@ -651,6 +666,76 @@ export class GameEngine {
       (g) => g.state !== 'dead' && g.distance >= this.pathState.distance - 18
     );
     const maxWalkDist = blockingGuardian ? blockingGuardian.distance - 38 : this.pathState.targetDistance;
+
+    // H: Road Dash Strike (shoots forward ~1.5s of walking distance; stuns guardians on impact!)
+    if (this.pathDashTimer <= 0 && this.pathDashCooldown <= 0 && this.input.consumeAction('dash')) {
+      this.pathDashTimer = 0.24;
+      this.pathDashCooldown = 2.2;
+      this.pathDashDirX = move.x;
+      this.playerAnim.play('dodge_roll', true, 0.24);
+      this.sound.playDodge();
+      this.effects.addFlash('#00e5ff', 0.14);
+    }
+
+    if (this.pathDashTimer > 0) {
+      this.pathDashTimer = Math.max(0, this.pathDashTimer - dt);
+      const dashSpeedForward = (walkSpeed * 1.5) / 0.24;
+      this.pathState.distance = Math.min(maxWalkDist, this.pathState.distance + dashSpeedForward * dt);
+      if (this.pathDashDirX !== 0) {
+        this.pathState.playerX = Math.max(
+          -230,
+          Math.min(230, this.pathState.playerX + this.pathDashDirX * strafeSpeed * 1.35 * dt)
+        );
+      }
+      // Check dash collision against blocking road guardian -> low damage + STUN!
+      if (
+        blockingGuardian &&
+        blockingGuardian.state !== 'dead' &&
+        blockingGuardian.distance - this.pathState.distance <= 52 &&
+        Math.abs(blockingGuardian.x - this.pathState.playerX) < 115
+      ) {
+        this.pathDashTimer = 0;
+        const dashDmg = Math.max(4, Math.round(this.stats.baseAttack * 0.35));
+        blockingGuardian.isShielded = false;
+        blockingGuardian.hp = Math.max(0, blockingGuardian.hp - dashDmg);
+        blockingGuardian.state = blockingGuardian.hp <= 0 ? 'dead' : 'hurt';
+        blockingGuardian.stunned = blockingGuardian.hp > 0;
+        blockingGuardian.stateTimer = 0;
+        blockingGuardian.stateDuration = blockingGuardian.hp <= 0 ? (blockingGuardian.isMiniBoss ? 1.55 : 1.15) : 1.7;
+        blockingGuardian.burstHitsLeft = 0;
+        blockingGuardian.animFrame = 0;
+        blockingGuardian.animElapsed = 0;
+        this.sound.playBossStagger();
+        this.effects.addShake(8, 0.22);
+        this.effects.addFlash('#00e5ff', 0.22);
+        const popX = 640 + blockingGuardian.x * 0.8;
+        this.effects.hudPopups.push({
+          x: popX,
+          y: 350,
+          vx: 0,
+          vy: -48,
+          text: blockingGuardian.hp <= 0 ? `DASH KO! -${dashDmg}` : `DASH STUN! -${dashDmg}`,
+          color: '#ffd740',
+          scale: 1.15,
+          life: 1.05,
+          maxLife: 1.05,
+          kind: 'gold',
+        });
+        if (blockingGuardian.hp <= 0) {
+          const bountyMul = this.getBountyBonusMultiplier();
+          const gold = Math.max(1, Math.round(blockingGuardian.goldReward * bountyMul));
+          const xp = Math.round(blockingGuardian.xpReward * bountyMul);
+          this.runSummary.guardiansSlainThisRun += 1;
+          this.awardGold(gold, popX, 410);
+          this.awardXp(xp, popX, 444);
+          if (blockingGuardian.isMiniBoss) {
+            this.healPlayer(Math.round(this.player.maxHp * 0.2));
+            this.sound.playVictory();
+          }
+          saveProgress(this.progress);
+        }
+      }
+    }
 
     // Road Combat Actions: L (Parry/Dodge), K (Quick), J (Strong)
     if (this.input.consumeAction('defense') && this.pathDefenseTimer <= 0) {
@@ -775,6 +860,7 @@ export class GameEngine {
         g.stateTimer += dt;
         if (g.stateTimer >= g.stateDuration) {
           g.state = 'idle';
+          g.stunned = false;
           g.stateTimer = 0;
         }
         continue;
@@ -1150,6 +1236,7 @@ export class GameEngine {
     this.player.inputBuffer = this.combos.getBuffer();
 
     if (this.player.dodgeCooldown > 0) this.player.dodgeCooldown = Math.max(0, this.player.dodgeCooldown - dt);
+    if (this.player.dashCooldown > 0) this.player.dashCooldown = Math.max(0, this.player.dashCooldown - dt);
     if (this.player.parryCooldown > 0) this.player.parryCooldown = Math.max(0, this.player.parryCooldown - dt);
     if (this.player.quickAttackCooldown > 0) {
       this.player.quickAttackCooldown = Math.max(0, this.player.quickAttackCooldown - dt);
@@ -1212,6 +1299,28 @@ export class GameEngine {
       (p.state === 'recovery' && p.stateTimer >= p.stateDuration * 0.45);
 
     if (canAct) {
+      // H: Dash Strike (shoots forward ~1.5s walking distance; low dmg + STUNS enemy on impact!)
+      if (this.input.consumeAction('dash') && p.dashCooldown <= 0 && p.stamina >= 14) {
+        const hasDir = move.x !== 0 || move.y !== 0;
+        const dashDir = hasDir
+          ? normalize(move)
+          : normalize(sub(this.bossBody.pos, body.pos));
+        const finalDir = dashDir.x === 0 && dashDir.y === 0 ? { x: 0, y: -1 } : dashDir;
+        p.stamina -= 14;
+        p.state = 'dash';
+        p.stateTimer = 0;
+        p.stateDuration = 0.24;
+        p.dashCooldown = 2.2;
+        p.dashDir = finalDir;
+        p.dashHitBoss = false;
+        body.facing = { ...finalDir };
+        this.playerAnim.play('dodge_roll', true, 0.24);
+        this.vfx.spawn('dodge_afterimage', body.pos.x, body.pos.y, 18, '#00e5ff', 1.25, finalDir.x < 0);
+        this.sound.playDodge();
+        this.effects.spawnBurst(body.pos.x, body.pos.y, 8, '#00e5ff', 10, 180, 4);
+        return;
+      }
+
       // L: Directional Dodge (WASD + L) OR Neutral Parry (L alone)
       if (this.input.consumeAction('defense')) {
         const hasDir = move.x !== 0 || move.y !== 0;
@@ -1270,6 +1379,88 @@ export class GameEngine {
 
     // Advance timed states
     p.stateTimer += dt;
+
+    if (p.state === 'dash') {
+      const dashSpeed = (this.stats.moveSpeed * 1.5) / Math.max(0.05, p.stateDuration);
+      body.vel.x = p.dashDir.x * dashSpeed;
+      body.vel.y = p.dashDir.y * dashSpeed;
+
+      // Check dash collision against Boss -> low damage + STUN + dash_stun animation!
+      if (!p.dashHitBoss && this.boss.state !== 'defeated') {
+        const dBoss = dist(body.pos, this.bossBody.pos);
+        if (dBoss <= body.radius + this.bossBody.radius + 28) {
+          p.dashHitBoss = true;
+          const dashDmg = Math.max(4, Math.round(this.stats.baseAttack * 0.35));
+          this.boss.hp = Math.max(0, this.boss.hp - dashDmg);
+          this.boss.flashTimer = 0.16;
+          this.vfx.spawn('dash_stun', this.bossBody.pos.x, this.bossBody.pos.y, 44, '#00e5ff', 1.45);
+          this.effects.spawnBurst(this.bossBody.pos.x, this.bossBody.pos.y, 44, '#ffd740', 18, 280, 6);
+          this.effects.addShake(9, 0.24);
+          this.effects.addFlash('#00e5ff', 0.22);
+          this.physics.triggerHitstop(0.06);
+
+          if (this.boss.hp <= 0) {
+            this.handleBossDefeated();
+          } else {
+            this.boss.state = 'staggered';
+            this.boss.stateTimer = 0;
+            this.boss.stateDuration = 1.45;
+            this.boss.currentMove = null;
+            this.boss.isShielding = false;
+            this.boss.tellLabel = 'DASH STUNNED!';
+            this.physics.clearHitboxesForOwner('boss');
+            this.bossAnim.play('stagger', true);
+            this.sound.playBossStagger();
+            this.effects.spawnText(this.bossBody.pos.x, this.bossBody.pos.y, 96, `DASH STUN! -${dashDmg}`, '#ffd740', 1.35, 1.05);
+          }
+
+          // Stop cleanly in front of the stunned boss so player can follow up immediately
+          body.vel.x = 0;
+          body.vel.y = 0;
+          p.state = 'recovery';
+          p.stateTimer = 0;
+          p.stateDuration = 0.12;
+          return;
+        }
+      }
+
+      // Check dash collision against Arena Minions -> low damage + STUN!
+      for (const m of this.arenaMinions) {
+        if (m.state === 'dead' || m.stunned) continue;
+        if (Math.hypot(m.x - body.pos.x, m.y - body.pos.y) <= 64) {
+          const dashDmg = Math.max(4, Math.round(this.stats.baseAttack * 0.35));
+          m.isShielded = false;
+          m.hp = Math.max(0, m.hp - dashDmg);
+          m.state = m.hp <= 0 ? 'dead' : 'hurt';
+          m.stunned = m.hp > 0;
+          m.stateTimer = 0;
+          m.stateDuration = m.hp <= 0 ? 1.15 : 1.65;
+          m.animFrame = 0;
+          m.animElapsed = 0;
+          this.vfx.spawn('dash_stun', m.x, m.y, 32, '#00e5ff', 1.1);
+          this.sound.playBossStagger();
+          this.effects.spawnText(m.x, m.y, 58, m.hp <= 0 ? `DASH KO!` : `STUNNED! -${dashDmg}`, '#ffd740', 1.05, 0.9);
+          if (m.hp <= 0) {
+            const bountyMul = this.getBountyBonusMultiplier();
+            const gold = Math.max(1, Math.round(m.goldReward * bountyMul));
+            const xp = Math.round(m.xpReward * bountyMul);
+            this.runSummary.guardiansSlainThisRun += 1;
+            this.awardGold(gold, 640 + m.x * 0.7, 360);
+            this.awardXp(xp, 640 + m.x * 0.7, 392);
+            this.triggerAdrenalineHeal('kill');
+            saveProgress(this.progress);
+          }
+        }
+      }
+
+      if (p.stateTimer >= p.stateDuration) {
+        body.vel.x *= 0.25;
+        body.vel.y *= 0.25;
+        p.state = 'idle';
+        p.stateTimer = 0;
+      }
+      return;
+    }
 
     if (p.state === 'windup') {
       if (p.stateTimer >= p.stateDuration) {
@@ -2259,6 +2450,7 @@ export class GameEngine {
         m.stateTimer += dt;
         if (m.stateTimer >= m.stateDuration) {
           m.state = 'idle';
+          m.stunned = false;
           m.stateTimer = 0;
         }
         continue;

@@ -146,6 +146,7 @@ export class UIOverlay {
             <div class="control-chip"><kbd>W A S D</kbd>Walk trail &amp; strafe arena</div>
             <div class="control-chip"><kbd>K</kbd>Quick Strike (fast combo starter)</div>
             <div class="control-chip"><kbd>J</kbd>Strong Cleave (heavy &amp; poise break)</div>
+            <div class="control-chip"><kbd>H</kbd>Dash Strike (1.5s lunge + Stun)</div>
             <div class="control-chip"><kbd>L</kbd>Parry (neutral) / Dodge (+WASD)</div>
           </div>
           <div style="text-align:center;font-size:13px;color:#94a3b8;">

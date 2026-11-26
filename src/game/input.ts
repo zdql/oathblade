@@ -1,6 +1,6 @@
 import type { Vec2 } from '../physics';
 
-export type ActionKey = 'strong' | 'quick' | 'defense' | 'confirm' | 'escape' | 'debug';
+export type ActionKey = 'strong' | 'quick' | 'defense' | 'dash' | 'confirm' | 'escape' | 'debug';
 
 interface BufferedPress {
   time: number;
@@ -56,6 +56,7 @@ export class InputManager {
       code === 'KeyA' ||
       code === 'KeyS' ||
       code === 'KeyD' ||
+      code === 'KeyH' ||
       code === 'KeyJ' ||
       code === 'KeyK' ||
       code === 'KeyL' ||
@@ -70,6 +71,7 @@ export class InputManager {
     }
 
     if (!e.repeat) {
+      if (code === 'KeyH') this.buffered.set('dash', { time: this.clock });
       if (code === 'KeyJ') this.buffered.set('strong', { time: this.clock });
       if (code === 'KeyK') this.buffered.set('quick', { time: this.clock });
       if (code === 'KeyL') this.buffered.set('defense', { time: this.clock });

@@ -55,10 +55,16 @@ export class TouchControls {
         </div>
       </div>
       <div class="touch-right">
-        <button class="touch-btn touch-btn-parry" data-touch-act="defense">
-          <span class="touch-key">L</span>
-          <span class="touch-lbl">PARRY / DODGE</span>
-        </button>
+        <div class="touch-btn-row">
+          <button class="touch-btn touch-btn-dash" data-touch-act="dash">
+            <span class="touch-key">H</span>
+            <span class="touch-lbl">DASH</span>
+          </button>
+          <button class="touch-btn touch-btn-parry" data-touch-act="defense">
+            <span class="touch-key">L</span>
+            <span class="touch-lbl">PARRY / DODGE</span>
+          </button>
+        </div>
         <div class="touch-btn-row">
           <button class="touch-btn touch-btn-quick" data-touch-act="quick">
             <span class="touch-key">K</span>
@@ -134,7 +140,7 @@ export class TouchControls {
     }
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-touch-act]').forEach((btn) => {
-      const act = btn.dataset.touchAct as 'quick' | 'strong' | 'defense';
+      const act = btn.dataset.touchAct as 'quick' | 'strong' | 'defense' | 'dash';
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         btn.classList.add('pressed');

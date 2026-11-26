@@ -228,6 +228,7 @@ export interface RoadGuardian {
   burstHitsLeft: number;
   isShielded: boolean;
   isArmored: boolean;
+  stunned?: boolean;
   feintTriggered: boolean;
   attackPattern: 'standard' | 'leap_slam' | 'delayed_heavy' | 'feint_flank' | 'multi_chain';
   goldReward: number;

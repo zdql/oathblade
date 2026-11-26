@@ -184,6 +184,38 @@ function drawVfxFrame(p: PixelCanvas, event: VfxAnimEvent, t: number, color: str
       break;
     }
 
+    case 'dash_stun': {
+      // 18-frame electric-cyan dash impact shockwave + golden orbiting stun stars!
+      const rOuter = Math.round(6 + t * 21);
+      const rInner = Math.round(3 + t * 14);
+      p.ellipse(cx, cy, rOuter, Math.round(rOuter * 0.58), 'rgba(0,0,0,0)', '#00e5ff');
+      if (t < 0.72) {
+        p.ellipse(cx, cy, rInner, Math.round(rInner * 0.58), 'rgba(0,0,0,0)', '#ffffff');
+      }
+      // Radial impact lines
+      if (t < 0.55) {
+        for (let i = 0; i < 6; i++) {
+          const ang = (i * Math.PI) / 3 + t * 1.4;
+          p.line(
+            cx + Math.round(Math.cos(ang) * 4),
+            cy + Math.round(Math.sin(ang) * 3),
+            cx + Math.round(Math.cos(ang) * rOuter),
+            cy + Math.round(Math.sin(ang) * rOuter * 0.65),
+            '#ffd740',
+            1
+          );
+        }
+      }
+      // Orbiting bright yellow stun stars above impact point
+      for (let i = 0; i < 4; i++) {
+        const ang = t * 7.5 + (i * Math.PI) / 2;
+        const sx = cx + Math.round(Math.cos(ang) * 14);
+        const sy = cy - 10 + Math.round(Math.sin(ang) * 5);
+        p.sparkle(sx, sy, 3, '#ffffff', '#ffea00');
+      }
+      break;
+    }
+
     case 'phase_nova': {
       // 22-frame massive Phase II eruption wave
       const r = Math.round(4 + t * 24);

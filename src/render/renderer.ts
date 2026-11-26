@@ -320,7 +320,12 @@ export class GameRenderer {
         ctx.fillRect(gx - bw / 2, topY, bw, g.isMiniBoss ? 10 : 7);
         ctx.fillStyle = g.variantColor;
         ctx.fillRect(gx - bw / 2, topY, bw * Math.max(0, g.hp / g.maxHp), g.isMiniBoss ? 10 : 7);
-        if (g.state === 'windup') {
+        if (g.stunned && g.state === 'hurt') {
+          drawStunStars(ctx, gx, topY - 18, 22 * gScale, this.clock);
+          ctx.fillStyle = '#ffea00';
+          ctx.font = '800 12px system-ui, sans-serif';
+          ctx.fillText('★ STUNNED ★', gx, topY - 30);
+        } else if (g.state === 'windup') {
           ctx.fillStyle = '#ffd54f';
           ctx.font = '800 13px system-ui, sans-serif';
           const warn = g.isMiniBoss
@@ -352,6 +357,9 @@ export class GameRenderer {
     // Pokémon-style turf disc & walking/fighting Player Back-Sprite
     const px = this.width * 0.5 + ps.playerX;
     drawBattlePlatform(ctx, biome, px, 594, 54, 16);
+    if (engine.pathDashTimer > 0) {
+      drawDashStreaks(ctx, px, 560, 1.2);
+    }
     renderPlayerPixelSprite(ctx, px, 592, 1.25, {
       event: engine.playerAnim.currentEvent,
       frame: engine.playerAnim.frame,
@@ -574,7 +582,7 @@ export class GameRenderer {
     const drawList: Array<{ y: number; draw: () => void }> = [
       {
         y: engine.bossBody.pos.y,
-        draw: () =>
+        draw: () => {
           renderBossPixelSprite(
             ctx,
             bProj.sx,
@@ -590,11 +598,18 @@ export class GameRenderer {
               flashHit: engine.boss.flashTimer > 0,
               accentColor: engine.boss.instance.template.palette.accent,
             }
-          ),
+          );
+          if (engine.boss.state === 'staggered') {
+            drawStunStars(ctx, bProj.sx, bProj.sy - 138 * bProj.scale, 34 * bProj.scale, this.clock);
+          }
+        },
       },
       {
         y: engine.playerBody.pos.y,
         draw: () => {
+          if (engine.player.state === 'dash') {
+            drawDashStreaks(ctx, pProj.sx, pProj.sy - 32 * pProj.scale, pProj.scale);
+          }
           renderPlayerPixelSprite(
             ctx,
             pProj.sx,
@@ -636,7 +651,9 @@ export class GameRenderer {
             ctx.fillRect(mProj.sx - bw / 2, ty, bw, 6);
             ctx.fillStyle = m.variantColor;
             ctx.fillRect(mProj.sx - bw / 2, ty, bw * Math.max(0, m.hp / m.maxHp), 6);
-            if (m.state === 'windup') {
+            if (m.stunned && m.state === 'hurt') {
+              drawStunStars(ctx, mProj.sx, ty - 14, 18 * mProj.scale, this.clock);
+            } else if (m.state === 'windup') {
               ctx.fillStyle = '#ffd54f';
               ctx.font = '800 12px system-ui, sans-serif';
               ctx.textAlign = 'center';
@@ -925,17 +942,19 @@ export class GameRenderer {
 
     const qCd = mode === 'combat' ? p.quickAttackCooldown : engine.pathAttackCooldown;
     const hCd = mode === 'combat' ? p.heavyAttackCooldown : engine.pathHeavyCooldown;
+    const dCd = mode === 'combat' ? p.dashCooldown : engine.pathDashCooldown;
     ctx.textAlign = 'right';
     if (mode === 'combat' && p.counterWindowTimer > 0) {
       ctx.fillStyle = '#ffd740';
       ctx.font = '800 11px system-ui, sans-serif';
       ctx.fillText('COUNTER READY! (J / K)', lx + plateW - 12, ly + 82);
     } else {
-      ctx.fillStyle = hCd > 0 ? '#ffab91' : '#69f0ae';
+      ctx.fillStyle = dCd > 0 || hCd > 0 ? '#ffab91' : '#69f0ae';
       ctx.font = '700 10px system-ui, sans-serif';
       const kStr = qCd > 0 ? `K:${qCd.toFixed(1)}s` : 'K:RDY';
       const jStr = hCd > 0 ? `J:${hCd.toFixed(1)}s` : 'J:RDY';
-      ctx.fillText(`${kStr}  •  ${jStr}`, lx + plateW - 12, ly + 82);
+      const dashStr = dCd > 0 ? `H:${dCd.toFixed(1)}s` : 'H:RDY';
+      ctx.fillText(`${kStr} • ${jStr} • ${dashStr}`, lx + plateW - 12, ly + 82);
     }
 
     // Active Run-Only Buff Badges above Bottom-Left Plate (identical in Road & Combat!)
@@ -1072,7 +1091,7 @@ export class GameRenderer {
       } else {
         ctx.fillStyle = '#94a3b8';
         ctx.font = '600 11px system-ui, sans-serif';
-        ctx.fillText('WASD Move • K Quick • J Strong • L Parry/Dodge', rx + 14, ry + 83);
+        ctx.fillText('WASD Move • K/J Attack • H Dash Stun • L Parry', rx + 14, ry + 83);
       }
     } else {
       const remG = engine.roadGuardians.filter((g) => g.state !== 'dead').length;
@@ -1089,7 +1108,7 @@ export class GameRenderer {
       );
       ctx.fillStyle = '#94a3b8';
       ctx.font = '600 11px system-ui, sans-serif';
-      ctx.fillText('WASD Move • K Quick • J Strong • L Parry/Dodge', rx + 14, ry + 83);
+      ctx.fillText('WASD Move • K/J Attack • H Dash Stun • L Parry', rx + 14, ry + 83);
     }
 
     ctx.restore();
@@ -1300,5 +1319,40 @@ function drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, r: numbe
   ctx.strokeStyle = 'rgba(255,255,255,0.45)';
   ctx.lineWidth = 1.2;
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawStunStars(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, time: number): void {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 234, 0, 0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, radius, radius * 0.34, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  for (let i = 0; i < 4; i++) {
+    const ang = time * 6.2 + (i * Math.PI) / 2;
+    const sx = cx + Math.cos(ang) * radius;
+    const sy = cy + Math.sin(ang) * radius * 0.34;
+    ctx.fillStyle = i % 2 === 0 ? '#ffea00' : '#00e5ff';
+    ctx.fillRect(sx - 4, sy - 1.5, 8, 3);
+    ctx.fillRect(sx - 1.5, sy - 4, 3, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(sx - 1, sy - 1, 2, 2);
+  }
+  ctx.restore();
+}
+
+function drawDashStreaks(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number): void {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0, 229, 255, 0.78)';
+  ctx.lineWidth = 2.5 * scale;
+  for (let i = -2; i <= 2; i++) {
+    const ox = i * 11 * scale;
+    ctx.beginPath();
+    ctx.moveTo(cx + ox, cy - 18 * scale);
+    ctx.lineTo(cx + ox * 1.15, cy + 38 * scale);
+    ctx.stroke();
+  }
   ctx.restore();
 }

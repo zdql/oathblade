@@ -37,6 +37,7 @@ export type VfxAnimEvent =
   | 'impact_hit'
   | 'guard_clang'
   | 'stagger_burst'
+  | 'dash_stun'
   | 'phase_nova'
   | 'shrine_heal';
 
@@ -82,6 +83,7 @@ export const VFX_ANIM_CLIPS: Record<VfxAnimEvent, AnimClipSpec> = {
   impact_hit: { frames: 12, fps: 40, loop: false },
   guard_clang: { frames: 14, fps: 36, loop: false },
   stagger_burst: { frames: 16, fps: 28, loop: false },
+  dash_stun: { frames: 18, fps: 30, loop: false },
   phase_nova: { frames: 22, fps: 26, loop: false },
   shrine_heal: { frames: 18, fps: 22, loop: false },
 };

@@ -667,6 +667,13 @@ button,
   background: radial-gradient(circle at 30% 30%, rgba(255, 138, 101, 0.88), rgba(198, 40, 40, 0.88));
 }
 
+.touch-btn-dash {
+  width: 78px;
+  height: 50px;
+  border-radius: 26px;
+  background: radial-gradient(circle at 30% 30%, rgba(0, 229, 255, 0.88), rgba(2, 119, 189, 0.88));
+}
+
 .touch-btn-parry {
   width: 118px;
   height: 50px;
@@ -760,7 +767,14 @@ button,
     width: 62px;
     height: 62px;
   }
-  .touch-btn-parry {
+  .touch-btn-dash {
+  width: 78px;
+  height: 50px;
+  border-radius: 26px;
+  background: radial-gradient(circle at 30% 30%, rgba(0, 229, 255, 0.88), rgba(2, 119, 189, 0.88));
+}
+
+.touch-btn-parry {
     width: 104px;
     height: 44px;
   }
