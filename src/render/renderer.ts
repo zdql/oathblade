@@ -15,7 +15,8 @@ export class GameRenderer {
   private clock = 0;
   private displayHp = -1;
   private displayGold = -1;
-  private displayXp = -1;
+  private displayXpRatio = -1;
+  private lastRenderedLevel = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -55,11 +56,14 @@ export class GameRenderer {
       this.displayGold += (engine.progress.gold - this.displayGold) * lerpRate;
       if (Math.abs(this.displayGold - engine.progress.gold) < 0.5) this.displayGold = engine.progress.gold;
     }
-    if (this.displayXp < 0) this.displayXp = engine.progress.xp;
-    else {
-      this.displayXp += (engine.progress.xp - this.displayXp) * lerpRate;
-      if (Math.abs(this.displayXp - engine.progress.xp) < 0.5) this.displayXp = engine.progress.xp;
+    const xpNeededNow = getXpForNextLevel(engine.progress.level);
+    const targetXpRatio = Math.max(0, Math.min(1, engine.progress.xp / Math.max(1, xpNeededNow)));
+    if (this.displayXpRatio < 0 || this.lastRenderedLevel !== engine.progress.level) {
+      this.lastRenderedLevel = engine.progress.level;
+      this.displayXpRatio = targetXpRatio < this.displayXpRatio ? 0 : targetXpRatio;
     }
+    this.displayXpRatio += (targetXpRatio - this.displayXpRatio) * Math.min(1, dt * 6.5);
+    if (Math.abs(this.displayXpRatio - targetXpRatio) < 0.004) this.displayXpRatio = targetXpRatio;
 
     const ctx = this.ctx;
     ctx.save();
@@ -1003,7 +1007,6 @@ export class GameRenderer {
 
     // Animated Level & XP Progress Pill (right half of top row)
     const xpNeeded = getXpForNextLevel(engine.progress.level);
-    const xpRatio = Math.max(0, Math.min(1, engine.progress.xp / Math.max(1, xpNeeded)));
     const xpScale = 1 + Math.sin(Math.min(1, fx.xpPulse) * Math.PI) * 0.1;
     ctx.save();
     ctx.translate(rx + plateW - 12 - pillW / 2, ry + 10 + pillH / 2);
@@ -1043,14 +1046,14 @@ export class GameRenderer {
       ctx.fillText(`${engine.progress.xp}/${xpNeeded}`, pillW / 2 - 7, 1);
     }
 
-    // Mini XP progress bar along bottom of pill
+    // Mini XP progress bar along bottom of pill (smoothly animated!)
     const xpBarX = -pillW / 2 + 8;
     const xpBarY = 7;
     const xpBarW = pillW - 16;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fillRect(xpBarX, xpBarY, xpBarW, 5);
-    ctx.fillStyle = '#7be3ff';
-    ctx.fillRect(xpBarX, xpBarY, xpBarW * xpRatio, 5);
+    ctx.fillStyle = fx.xpPulse > 0.15 ? '#b3f3ff' : '#7be3ff';
+    ctx.fillRect(xpBarX, xpBarY, xpBarW * Math.max(0, Math.min(1, this.displayXpRatio)), 5);
     ctx.restore();
 
     // Lower contextual info inside Bottom-Right Plate

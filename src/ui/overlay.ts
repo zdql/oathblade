@@ -310,6 +310,9 @@ export class UIOverlay {
               <div class="reward-total">
                 Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)${s.levelsGainedThisRun > 0 ? ` • <strong style="color:#69f0ae;">+${s.levelsGainedThisRun} LVL UP!</strong>` : ''}
               </div>
+              <div class="xp-bar-track" style="margin-top:8px;">
+                <div class="xp-bar-fill" style="width:${Math.min(100, Math.round((p.xp / Math.max(1, getXpForNextLevel(p.level))) * 100))}%"></div>
+              </div>
             </div>
           </div>
 
@@ -562,6 +565,16 @@ export class UIOverlay {
               <span style="background:${p.skillPoints > 0 ? 'rgba(105,240,174,0.18)' : 'rgba(255,255,255,0.08)'};border:1px solid ${p.skillPoints > 0 ? '#69f0ae' : 'rgba(255,255,255,0.16)'};color:${p.skillPoints > 0 ? '#69f0ae' : '#94a3b8'};padding:4px 10px;border-radius:999px;font-size:13px;">
                 LVL Pts: ${p.skillPoints}
               </span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-bottom:4px;">
+              <span>Level ${p.level} → Level ${p.level + 1} Progress</span>
+              <span>${p.xp} / ${getXpForNextLevel(p.level)} XP${p.skillPoints === 0 ? ` (${getXpForNextLevel(p.level) - p.xp} XP to next Upgrade Point)` : ''}</span>
+            </div>
+            <div class="xp-bar-track">
+              <div class="xp-bar-fill" style="width:${Math.min(100, Math.round((p.xp / Math.max(1, getXpForNextLevel(p.level))) * 100))}%"></div>
             </div>
           </div>
 
