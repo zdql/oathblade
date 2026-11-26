@@ -437,3 +437,215 @@ body {
   width: 100%;
   accent-color: var(--emerald);
 }
+
+/* ============================================================================
+ * MULTI-TOUCH GAMEPAD & MOBILE / IPAD RESPONSIVE OPTIMIZATION
+ * ========================================================================== */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  display: none;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  z-index: 15;
+  touch-action: none;
+}
+
+.touch-left,
+.touch-right {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.touch-stick {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  border-radius: 50%;
+  background: rgba(12, 16, 24, 0.52);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+}
+
+.touch-stick-ring {
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 213, 79, 0.35);
+}
+
+.touch-dir {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.48);
+  pointer-events: none;
+}
+.touch-dir-n { top: 8px; left: 50%; transform: translateX(-50%); }
+.touch-dir-s { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.touch-dir-w { left: 10px; top: 50%; transform: translateY(-50%); }
+.touch-dir-e { right: 10px; top: 50%; transform: translateY(-50%); }
+
+.touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 35%, #fff59d, #ffab00);
+  border: 2px solid rgba(0, 0, 0, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.touch-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.touch-btn-row {
+  display: flex;
+  gap: 12px;
+}
+
+.touch-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.38);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease;
+}
+
+.touch-btn.pressed {
+  transform: scale(0.9);
+  filter: brightness(1.25);
+}
+
+.touch-btn-quick {
+  background: radial-gradient(circle at 30% 30%, rgba(105, 240, 174, 0.85), rgba(0, 137, 123, 0.85));
+}
+
+.touch-btn-strong {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 138, 101, 0.88), rgba(198, 40, 40, 0.88));
+}
+
+.touch-btn-parry {
+  width: 118px;
+  height: 50px;
+  border-radius: 26px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 213, 79, 0.9), rgba(245, 124, 0, 0.88));
+  color: #141008;
+}
+
+.touch-key {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.touch-lbl {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  opacity: 0.92;
+  margin-top: 2px;
+}
+
+/* Mobile & iPad Viewport Fit */
+@media (max-width: 1024px), (pointer: coarse) {
+  body {
+    height: 100dvh;
+    min-height: 100dvh;
+    touch-action: manipulation;
+  }
+
+  #app {
+    height: 100dvh;
+    padding: 0;
+  }
+
+  #game-shell {
+    width: 100vw;
+    height: 100dvh;
+    max-width: 100vw;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+
+  #game-canvas {
+    object-fit: contain;
+  }
+
+  .overlay-screen {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 14px 16px;
+    max-height: 92dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sanctuary-card {
+    max-height: 94dvh;
+  }
+
+  .shop-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .top-tools {
+    top: 8px;
+    right: 8px;
+    gap: 5px;
+  }
+
+  .top-tools .btn-sm {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .touch-stick {
+    width: 112px;
+    height: 112px;
+  }
+  .touch-stick-knob {
+    width: 44px;
+    height: 44px;
+  }
+  .touch-btn {
+    width: 62px;
+    height: 62px;
+  }
+  .touch-btn-parry {
+    width: 104px;
+    height: 44px;
+  }
+  .shop-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

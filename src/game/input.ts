@@ -8,6 +8,7 @@ interface BufferedPress {
 
 export class InputManager {
   private held = new Set<string>();
+  private virtualMove: Vec2 = { x: 0, y: 0 };
   private buffered = new Map<ActionKey, BufferedPress>();
   private clock = 0;
   private readonly bufferWindow = 0.14;
@@ -84,14 +85,25 @@ export class InputManager {
     this.held.delete(e.code);
   }
 
+  public setVirtualMove(dir: Vec2): void {
+    this.virtualMove = { x: dir.x, y: dir.y };
+  }
+
+  public pressAction(action: ActionKey): void {
+    this.buffered.set(action, { time: this.clock });
+  }
+
   public getMoveVector(): Vec2 {
-    let x = 0;
-    let y = 0;
+    let x = this.virtualMove.x;
+    let y = this.virtualMove.y;
     if (this.held.has('KeyA') || this.held.has('ArrowLeft')) x -= 1;
     if (this.held.has('KeyD') || this.held.has('ArrowRight')) x += 1;
     if (this.held.has('KeyW') || this.held.has('ArrowUp')) y -= 1;
     if (this.held.has('KeyS') || this.held.has('ArrowDown')) y += 1;
-    return { x, y };
+    return {
+      x: Math.max(-1, Math.min(1, x)),
+      y: Math.max(-1, Math.min(1, y)),
+    };
   }
 
   public consumeAction(action: ActionKey): boolean {

@@ -22,6 +22,7 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics';
 import type { SoundEngine } from '../audio/soundEngine';
 import { renderBossPortraitDataUrl } from '../render/bossPixelSprites';
 import { FIGHTING_STYLES, getStyleUpgradeCost, type FightingStyleId } from '../game/fightingStyles';
+import type { TouchControls } from './touchControls';
 
 type SanctuaryTab = 'upgrades' | 'gear' | 'pets' | 'styles' | 'combos' | 'forge';
 
@@ -29,6 +30,7 @@ export class UIOverlay {
   private container: HTMLElement;
   private engine: GameEngine;
   private sound: SoundEngine;
+  private touchControls: TouchControls;
   private activeTab: SanctuaryTab = 'upgrades';
 
   // Custom Combo Forge draft state
@@ -36,10 +38,11 @@ export class UIOverlay {
   private draftSeq: ComboInput[] = ['K', 'J', 'K'];
   private draftStyle: ComboVisualStyle = 'sunder';
 
-  constructor(container: HTMLElement, engine: GameEngine, sound: SoundEngine) {
+  constructor(container: HTMLElement, engine: GameEngine, sound: SoundEngine, touchControls: TouchControls) {
     this.container = container;
     this.engine = engine;
     this.sound = sound;
+    this.touchControls = touchControls;
     this.engine.uiDirtyCallback = () => this.render();
     this.render();
   }
@@ -69,6 +72,7 @@ export class UIOverlay {
 
     this.container.innerHTML = html;
     this.bindEvents();
+    this.touchControls.syncVisibility();
 
     const nextScrollEl = this.container.querySelector<HTMLElement>('.shop-scroll');
     if (nextScrollEl && savedScrollTop > 0) {
@@ -78,11 +82,13 @@ export class UIOverlay {
 
   private renderTopTools(): string {
     const muteLabel = this.sound.muted ? 'Audio: Off' : 'Audio: On';
-    const physLabel = this.engine.showPhysicsDebug ? 'Physics Lab: On' : 'Physics Lab (F1)';
+    const physLabel = this.engine.showPhysicsDebug ? 'Physics: On' : 'Physics (F1)';
+    const touchLabel = this.touchControls.enabled ? 'Touch: On' : 'Touch: Off';
     const showSanctuaryBtn = this.engine.screen === 'path' || this.engine.screen === 'combat';
     return `
       <div class="top-tools">
         ${showSanctuaryBtn ? `<button class="btn btn-secondary btn-sm" data-action="open-sanctuary">Sanctuary</button>` : ''}
+        <button class="btn btn-secondary btn-sm" data-action="toggle-touch">${touchLabel}</button>
         <button class="btn btn-secondary btn-sm" data-action="toggle-physics">${physLabel}</button>
         <button class="btn btn-secondary btn-sm" data-action="toggle-mute">${muteLabel}</button>
       </div>
@@ -532,6 +538,9 @@ export class UIOverlay {
         else if (act === 'next-boss') this.engine.continuePathToNextBoss();
         else if (act === 'toggle-mute') {
           this.sound.muted = !this.sound.muted;
+          this.render();
+        } else if (act === 'toggle-touch') {
+          this.touchControls.toggle();
           this.render();
         } else if (act === 'toggle-physics') {
           this.engine.showPhysicsDebug = !this.engine.showPhysicsDebug;

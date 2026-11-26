@@ -2,18 +2,21 @@ import { SoundEngine } from './audio/soundEngine';
 import { GameEngine } from './game/gameEngine';
 import { GameRenderer } from './render/renderer';
 import { UIOverlay } from './ui/overlay';
+import { TouchControls } from './ui/touchControls';
 
 function bootstrap(): void {
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement | null;
   const overlayEl = document.getElementById('ui-overlay');
-  if (!canvas || !overlayEl) {
-    throw new Error('Missing #game-canvas or #ui-overlay in index.html');
+  const touchEl = document.getElementById('touch-controls');
+  if (!canvas || !overlayEl || !touchEl) {
+    throw new Error('Missing #game-canvas, #ui-overlay, or #touch-controls in index.html');
   }
 
   const sound = new SoundEngine();
   const engine = new GameEngine(sound);
   const renderer = new GameRenderer(canvas);
-  new UIOverlay(overlayEl, engine, sound);
+  const touchControls = new TouchControls(touchEl, engine);
+  new UIOverlay(overlayEl, engine, sound, touchControls);
 
   engine.input.attach();
 
