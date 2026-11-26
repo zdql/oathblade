@@ -222,9 +222,11 @@ export function drawBiomeBackdrop(
   height: number,
   time: number,
   parallaxX = 0,
-  horizonY = 260
+  horizonY = 260,
+  stageSeed = 1
 ): void {
   const theme = BIOME_THEMES[biome];
+  const seedShift = (stageSeed % 997) * 0.37;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
 
@@ -233,6 +235,71 @@ export function drawBiomeBackdrop(
   for (let i = 0; i < theme.skyBands.length; i++) {
     ctx.fillStyle = theme.skyBands[i];
     ctx.fillRect(0, i * bandH, width, bandH + 2);
+  }
+
+  // 1b. Bespoke Per-Stage Sky Spectacles (Aurora, Dawn Rays, Constellations, Lightning!)
+  if (biome === 'tundra') {
+    // Animated Pixel Aurora Borealis Ribbons!
+    for (let x = 0; x < width; x += 18) {
+      const wave = Math.sin(x * 0.012 + time * 1.4 + seedShift) * 26;
+      ctx.fillStyle = x % 36 === 0 ? 'rgba(105, 240, 174, 0.24)' : 'rgba(0, 229, 255, 0.2)';
+      ctx.fillRect(x, Math.round(42 + wave), 16, 48);
+    }
+  } else if (biome === 'elysium' || biome === 'forest') {
+    // Radiant Sunbeams fanning from the celestial horizon
+    ctx.fillStyle = biome === 'elysium' ? 'rgba(255, 245, 157, 0.12)' : 'rgba(255, 255, 220, 0.08)';
+    for (let r = 0; r < 5; r++) {
+      const rx = width * (0.2 + r * 0.16) + Math.sin(seedShift + r) * 30;
+      ctx.beginPath();
+      ctx.moveTo(rx, 0);
+      ctx.lineTo(rx + 45, 0);
+      ctx.lineTo(rx - 90, horizonY);
+      ctx.lineTo(rx - 140, horizonY);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (biome === 'sanctum') {
+    // Golden Constellation Lines connecting stars + floating monoliths!
+    ctx.strokeStyle = 'rgba(255, 213, 79, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(140, 62);
+    ctx.lineTo(240, 95);
+    ctx.lineTo(355, 58);
+    ctx.lineTo(445, 112);
+    ctx.stroke();
+    for (let f = 0; f < 4; f++) {
+      const fx = Math.floor(180 + f * 290 - parallaxX * 0.1 + Math.sin(seedShift + f) * 40);
+      const fy = Math.floor(110 + Math.sin(time * 1.8 + f * 1.5) * 12);
+      ctx.fillStyle = '#311b92';
+      ctx.fillRect(fx - 26, fy, 52, 18);
+      ctx.fillStyle = '#ffd54f';
+      ctx.fillRect(fx - 22, fy + 2, 44, 4);
+      ctx.fillStyle = '#1f124d';
+      ctx.fillRect(fx - 14, fy + 18, 28, 12);
+    }
+  } else if (biome === 'stormpeak') {
+    // Periodic distant pixel lightning flashes in the thunderclouds!
+    if (Math.sin(time * 2.7 + seedShift) > 0.92) {
+      const lx = Math.floor(220 + ((Math.floor(time) * 193) % (width - 440)));
+      ctx.strokeStyle = '#80deea';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(lx, 12);
+      ctx.lineTo(lx - 18, 95);
+      ctx.lineTo(lx + 14, 160);
+      ctx.lineTo(lx - 8, horizonY);
+      ctx.stroke();
+    }
+  } else if (biome === 'eclipse') {
+    // Blazing Coronal Rings radiating around the Eclipse!
+    const ex = Math.floor(width * 0.74 - parallaxX * 0.03);
+    const ey = Math.floor(horizonY * 0.42);
+    ctx.strokeStyle = 'rgba(255, 171, 0, 0.35)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 54 + Math.sin(time * 3) * 5, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   // 2. Twinkling pixel stars (in dark biomes) or distant gliding birds (in bright biomes)
@@ -316,16 +383,15 @@ export function drawBiomeBackdrop(
     }
   }
 
-  // 5. Midground Pixel-Art Landmarks (Trees, Ruins, Marsh Reeds, Crags, Spires)
+  // 5. Midground Pixel-Art Landmarks (Unique architectural & organic silhouettes per biome + seed variance!)
   const count = 10;
   for (let i = 0; i < count; i++) {
     const baseX = Math.floor(
-      (((i * 165 - parallaxX * 0.22) % (width + 220)) + (width + 220)) % (width + 220) - 110
+      (((i * 165 + seedShift * 14 - parallaxX * 0.22) % (width + 220)) + (width + 220)) % (width + 220) - 110
     );
-    const h = 76 + ((i * 31) % 56);
+    const h = 76 + (((i * 31 + Math.floor(seedShift * 7)) % 64));
 
     if (biome === 'forest' || biome === 'marsh') {
-      // Pixel trunk + stepped lush canopy
       ctx.fillStyle = '#3e2723';
       ctx.fillRect(baseX - 10, horizonY - h * 0.55, 20, h * 0.6);
       ctx.fillStyle = theme.midSilhouette;
@@ -334,40 +400,58 @@ export function drawBiomeBackdrop(
       ctx.fillStyle = theme.midAccent;
       ctx.fillRect(baseX - 34, horizonY - h - 10, 44, 8);
       ctx.fillRect(baseX - 24, horizonY - h + 6, 32, 6);
-    } else if (biome === 'ruins') {
-      // Pixel stone pillars with gold trim
+      if (biome === 'marsh' && i % 2 === 0) {
+        // Hanging swamp willow vines & glowing lantern
+        ctx.fillStyle = '#76ff03';
+        ctx.fillRect(baseX + 18, horizonY - h + 42, 4, 24);
+        ctx.fillStyle = '#ffea00';
+        ctx.fillRect(baseX - 14, horizonY - 22, 6, 8);
+      }
+    } else if (biome === 'ruins' || biome === 'elysium') {
+      // Colonnade pillars & aqueduct arches
       ctx.fillStyle = theme.midSilhouette;
       ctx.fillRect(baseX - 18, horizonY - h, 36, h + 10);
       ctx.fillRect(baseX - 24, horizonY - h - 10, 48, 12);
+      if (i % 2 === 0) {
+        ctx.fillRect(baseX + 18, horizonY - h - 8, 110, 14);
+      }
       ctx.fillStyle = theme.midAccent;
       ctx.fillRect(baseX - 14, horizonY - h + 8, 28, 4);
-    } else if (biome === 'gorge') {
-      // Stepped volcanic crags + glowing lava fissure
+    } else if (biome === 'gorge' || biome === 'tundra') {
+      // Jagged basalt crags / crystalline glacier spires
       ctx.fillStyle = theme.midSilhouette;
       ctx.fillRect(baseX - 34, horizonY - h * 0.5, 68, h * 0.55);
       ctx.fillRect(baseX - 20, horizonY - h * 0.85, 40, h * 0.4);
       ctx.fillRect(baseX - 8, horizonY - h, 16, 24);
       ctx.fillStyle = theme.midAccent;
-      ctx.fillRect(baseX - 2, horizonY - h * 0.6, 4, h * 0.6);
+      ctx.fillRect(baseX - 2, horizonY - h * 0.65, 4, h * 0.65);
     } else {
-      // Gothic Citadel spires + flickering crimson brazier
+      // Gothic Citadel / Sanctum / Eclipse / Stormpeak spires + glowing windows/braziers
       ctx.fillStyle = theme.midSilhouette;
       ctx.fillRect(baseX - 18, horizonY - h, 36, h + 10);
       ctx.fillRect(baseX - 10, horizonY - h - 24, 20, 24);
       ctx.fillRect(baseX - 4, horizonY - h - 38, 8, 14);
-      const flick = Math.floor(Math.sin(time * 12 + i) * 4);
+      const flick = Math.floor(Math.sin(time * 12 + i) * 3);
       ctx.fillStyle = theme.midAccent;
-      ctx.fillRect(baseX - 4, horizonY - h + 12 + flick, 8, 12);
+      ctx.fillRect(baseX - 5, horizonY - h + 12 + flick, 10, 16);
     }
   }
 
-  // 6. Ground Floor (Crisp stepped pixel terrain bands + waving grass/stone accents)
+  // 6. Ground Floor (Crisp stepped pixel terrain + textured stone/moss patches!)
   const floorH = height - horizonY;
   const floorGrad = ctx.createLinearGradient(0, horizonY, 0, height);
   floorGrad.addColorStop(0, theme.floorTop);
   floorGrad.addColorStop(1, theme.floorBottom);
   ctx.fillStyle = floorGrad;
   ctx.fillRect(0, horizonY, width, floorH);
+
+  // Seeded floor stone/patch texture tiles for extra depth & variance
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+  for (let i = 0; i < 18; i++) {
+    const tx = Math.floor(((i * 131 + seedShift * 29 - parallaxX * 0.4) % width + width) % width);
+    const ty = horizonY + 18 + ((i * 67 + Math.floor(seedShift * 11)) % Math.max(40, floorH - 36));
+    ctx.fillRect(tx, ty, 32 + (i % 3) * 14, 10 + (i % 2) * 6);
+  }
 
   // Pixel grass tufts / stone flecks across the ground
   const sway = Math.round(Math.sin(time * 4) * 3);

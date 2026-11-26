@@ -20,6 +20,11 @@ describe('Procedural Boss Generator & 10-Tier Gauntlet', () => {
       expect(BOSS_TEMPLATES[i].baseHp).toBeGreaterThan(BOSS_TEMPLATES[i - 1].baseHp);
       expect(BOSS_TEMPLATES[i].baseDamage).toBeGreaterThan(BOSS_TEMPLATES[i - 1].baseDamage);
     }
+    // Every single boss has 3 unique signature Area Attacks!
+    for (const tpl of BOSS_TEMPLATES) {
+      const areaMoves = tpl.moves.filter((m) => m.steps.some((s) => Boolean(s.areaAttack)));
+      expect(areaMoves.length, `${tpl.name} unique area attacks`).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it('rolls procedural attribute variance and traits per seed', () => {

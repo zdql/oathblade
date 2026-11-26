@@ -4,6 +4,7 @@ import { renderPlayerPixelSprite } from './playerPixelSprite';
 import { renderBossPixelSprite } from './bossPixelSprites';
 import { renderRoadGuardianSprite } from './guardianPixelSprite';
 import { renderPetPixelSprite } from './petPixelSprite';
+import { renderBossAreaAttacks } from './bossAreaRenderer';
 import { isEverythingMaxed } from '../game/progression';
 import type { RoadsidePropKind } from '../game/runContent';
 
@@ -111,7 +112,7 @@ export class GameRenderer {
     const progress = Math.min(1, ps.distance / ps.targetDistance);
     const horizonY = 265;
 
-    drawBiomeBackdrop(ctx, biome, this.width, this.height, this.clock, ps.playerX * 0.6, horizonY);
+    drawBiomeBackdrop(ctx, biome, this.width, this.height, this.clock, ps.playerX * 0.6, horizonY, rv.seed);
 
     // Procedural Weather / Atmosphere Tint
     ctx.save();
@@ -483,7 +484,16 @@ export class GameRenderer {
 
   private renderCombatArena(engine: GameEngine, biome: typeof engine.gauntlet[0]['template']['biome']): void {
     const ctx = this.ctx;
-    drawBiomeBackdrop(ctx, biome, this.width, this.height, this.clock, engine.playerBody.pos.x * 0.35, 255);
+    drawBiomeBackdrop(
+      ctx,
+      biome,
+      this.width,
+      this.height,
+      this.clock,
+      engine.playerBody.pos.x * 0.35,
+      255,
+      engine.boss.instance.seed
+    );
 
     const pProj = this.projectArena(engine.playerBody.pos.x, engine.playerBody.pos.y);
     const bProj = this.projectArena(engine.bossBody.pos.x, engine.bossBody.pos.y);
@@ -511,6 +521,11 @@ export class GameRenderer {
       );
       ctx.stroke();
       ctx.restore();
+    }
+
+    // Render Detailed 20-Frame Boss Area Attacks (telegraph zones & bespoke detonations!)
+    if (engine.activeAreaAttacks.length > 0) {
+      renderBossAreaAttacks(ctx, engine.activeAreaAttacks, (wx, wy) => this.projectArena(wx, wy), this.clock);
     }
 
     // Depth-sorted Pokémon-style Pixel Sprites (Boss, Summoned Minions, and Player)!

@@ -24,6 +24,51 @@ export type BossVisualId =
 
 export type BossAttackSide = 'left' | 'right' | 'center' | 'feint_left_to_right' | 'aerial' | 'guard';
 
+export type AreaAttackShape = 'ring' | 'zones' | 'lanes' | 'cross';
+
+export type AreaAttackVisual =
+  | 'root_eruption'
+  | 'shockwave_ring'
+  | 'boulder_barrage'
+  | 'venom_pools'
+  | 'briar_lash_cross'
+  | 'marsh_geyser'
+  | 'gilded_fissure'
+  | 'flail_cyclone'
+  | 'pillar_collapse'
+  | 'magma_wave'
+  | 'cinder_meteors'
+  | 'wing_storm_lanes'
+  | 'crimson_cross_slash'
+  | 'ashen_pillars'
+  | 'blade_ring_burst'
+  | 'glacier_spikes'
+  | 'blizzard_ring'
+  | 'icicle_rain'
+  | 'starlight_beams'
+  | 'halo_nova'
+  | 'lance_rain'
+  | 'eclipse_cross'
+  | 'solar_flares'
+  | 'cataclysm_ring'
+  | 'thunder_strikes'
+  | 'storm_ring'
+  | 'arc_lanes'
+  | 'dawn_cross'
+  | 'oath_blades_rain'
+  | 'sovereign_nova';
+
+export interface BossAreaSpec {
+  shape: AreaAttackShape;
+  visual: AreaAttackVisual;
+  color: string;
+  secondaryColor: string;
+  /** Number of targeted zones/lanes (for 'zones' or 'lanes') */
+  count: number;
+  /** Radius of each zone or ring outer radius */
+  radius: number;
+}
+
 export interface BossMoveStep {
   /** Windup duration in seconds before hitbox spawns */
   windup: number;
@@ -49,6 +94,8 @@ export interface BossMoveStep {
   guardStance?: boolean;
   /** If true, boss is taunting/vulnerable and taking a hit deals 2x poise */
   vulnerableTaunt?: boolean;
+  /** Optional area-of-effect attack specification with bespoke multi-frame animation */
+  areaAttack?: BossAreaSpec;
   /** Short telegraph cue text/hint */
   tellLabel: string;
 }

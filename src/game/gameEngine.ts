@@ -31,6 +31,7 @@ import {
   type PlayerAnimEvent,
 } from '../render/spriteAnimator';
 import { PixelVfxManager } from '../render/vfxSprites';
+import type { ActiveBossAreaAttack } from '../render/bossAreaRenderer';
 import {
   generateRoadHealthPacks,
   generateRoadMinigame,
@@ -186,6 +187,7 @@ export class GameEngine {
   /** Minions dynamically summoned by bosses during combat! */
   public arenaMinions: Array<RoadGuardian & { y: number }> = [];
   public arenaHealthPacks: Array<{ id: string; x: number; y: number; healPct: number; life: number }> = [];
+  public activeAreaAttacks: ActiveBossAreaAttack[] = [];
   public bossSummonCooldown = 7.5;
   public petAttackTimer = 2.4;
   public petAttackFlash = 0;
@@ -416,6 +418,7 @@ export class GameEngine {
     this.playerDeathTimer = 0;
     this.arenaMinions = [];
     this.arenaHealthPacks = [];
+    this.activeAreaAttacks = [];
     this.bossSummonCooldown = 6.5;
     this.petAttackTimer = 2.2;
     this.petAttackFlash = 0;
@@ -1079,6 +1082,7 @@ export class GameEngine {
       this.updatePlayerCombat(dt);
       this.updateBossCombat(dt);
       this.updateArenaMinions(dt);
+      this.updateAreaAttacks(dt);
       this.updatePetCompanion(dt);
     }
 
@@ -1589,7 +1593,100 @@ export class GameEngine {
       // Leap upward on windup so player sees shadow expand below!
       this.bossBody.vz = step.jumpVz;
     }
+    if (step.areaAttack) {
+      this.spawnBossAreaTelegraph(step);
+    }
     this.sound.playBossTelegraph();
+  }
+
+  private spawnBossAreaTelegraph(step: BossMoveStep): void {
+    const spec = step.areaAttack!;
+    const targets: Array<{ x: number; y: number; radius: number }> = [];
+    const px = this.playerBody.pos.x;
+    const py = this.playerBody.pos.y;
+    const bx = this.bossBody.pos.x;
+    const by = this.bossBody.pos.y;
+
+    if (spec.shape === 'ring') {
+      targets.push({ x: bx, y: by, radius: spec.radius });
+    } else if (spec.shape === 'cross') {
+      targets.push({ x: px, y: py, radius: spec.radius });
+      targets.push({ x: bx, y: by + 70, radius: spec.radius });
+    } else if (spec.shape === 'lanes') {
+      const laneXs = [-210, 0, 210];
+      for (let i = 0; i < Math.min(spec.count, laneXs.length); i++) {
+        const lx = laneXs[i] + (Math.random() - 0.5) * 40;
+        targets.push({ x: lx, y: -30, radius: spec.radius });
+        targets.push({ x: lx, y: 115, radius: spec.radius });
+      }
+    } else {
+      // Targeted zones: 1 directly under player + remaining spread across arena
+      targets.push({ x: px, y: py, radius: spec.radius });
+      for (let i = 1; i < spec.count; i++) {
+        targets.push({
+          x: (Math.random() * 2 - 1) * 265,
+          y: -95 + Math.random() * 255,
+          radius: spec.radius,
+        });
+      }
+    }
+
+    const dmg = Math.round(this.boss.instance.stats.attackDamage * step.damageMul);
+    this.activeAreaAttacks.push({
+      id: `area_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      spec,
+      phase: 'telegraph',
+      elapsed: 0,
+      windupDuration: this.boss.stateDuration,
+      activeDuration: Math.max(0.45, step.active),
+      targets,
+      damage: dmg,
+      knockback: step.knockback,
+      parryable: step.parryable,
+      detonated: false,
+    });
+  }
+
+  private updateAreaAttacks(dt: number): void {
+    for (let i = this.activeAreaAttacks.length - 1; i >= 0; i--) {
+      const atk = this.activeAreaAttacks[i];
+      atk.elapsed += dt;
+      if (atk.phase === 'telegraph') {
+        if (this.boss.state === 'staggered' || this.boss.state === 'defeated') {
+          this.activeAreaAttacks.splice(i, 1);
+          continue;
+        }
+        if (atk.elapsed >= atk.windupDuration) {
+          atk.phase = 'active';
+          atk.elapsed = 0;
+          if (!atk.detonated) {
+            atk.detonated = true;
+            this.effects.addShake(9, 0.24);
+            this.sound.playHit(true, true);
+            for (const tgt of atk.targets) {
+              this.physics.spawnHitbox({
+                ownerId: 'boss',
+                faction: 'boss',
+                pos: { x: tgt.x, y: tgt.y },
+                radius: tgt.radius * 0.9,
+                ttl: 0.22,
+                damage: atk.damage,
+                poiseDamage: 22,
+                knockback: atk.knockback,
+                attackKind: 'boss_heavy',
+                direction: normalize(sub(this.playerBody.pos, tgt)),
+                parryable: atk.parryable,
+                hitsAirborne: true,
+                tag: `area_${atk.spec.visual}`,
+              });
+              this.effects.spawnBurst(tgt.x, tgt.y, 18, atk.spec.color, 8, 220, 5);
+            }
+          }
+        }
+      } else if (atk.elapsed >= atk.activeDuration) {
+        this.activeAreaAttacks.splice(i, 1);
+      }
+    }
   }
 
   private executeBossStepStrike(step: BossMoveStep): void {
@@ -1599,7 +1696,7 @@ export class GameEngine {
     const attackDir = dir.x === 0 && dir.y === 0 ? { x: 0, y: 1 } : dir;
     body.facing = attackDir;
 
-    if (step.damageMul <= 0 || step.hitboxRadius <= 0) return;
+    if (step.damageMul <= 0 || step.hitboxRadius <= 0 || step.areaAttack) return;
 
     applyLunge(body, attackDir, step.lungeSpeed, step.side === 'center' && step.jumpVz ? step.jumpVz : 0);
 

@@ -1,4 +1,5 @@
 import type { BossTemplate, BossTrait } from './types';
+import { BOSS_UNIQUE_AREA_MOVES } from './areaAttacks';
 
 export const BOSS_TRAITS: BossTrait[] = [
   {
@@ -1779,3 +1780,11 @@ export const BOSS_TEMPLATES: BossTemplate[] = [
     ],
   },
 ];
+
+// Attach all 3 unique signature Area Attacks to every single one of the 10 bosses!
+for (const tpl of BOSS_TEMPLATES) {
+  const uniqueAreas = BOSS_UNIQUE_AREA_MOVES[tpl.visualId];
+  if (uniqueAreas) {
+    tpl.moves.push(...uniqueAreas);
+  }
+}
