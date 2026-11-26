@@ -54,6 +54,7 @@ export type GameScreen =
   | 'combat'
   | 'victory_boss'
   | 'victory_run'
+  | 'run_summary'
   | 'sanctuary';
 
 export type PlayerActionState =
@@ -143,8 +144,11 @@ export interface PathState {
 export interface RunSummary {
   tierReached: number;
   bossesDefeatedThisRun: number;
+  guardiansSlainThisRun: number;
+  minigamesWonThisRun: number;
   goldEarnedThisRun: number;
   xpEarnedThisRun: number;
+  outcome: 'in_progress' | 'defeat' | 'victory';
   lastBossReward?: { gold: number; xp: number; bossName: string };
 }
 
@@ -229,8 +233,11 @@ export class GameEngine {
     this.runSummary = {
       tierReached: 1,
       bossesDefeatedThisRun: 0,
+      guardiansSlainThisRun: 0,
+      minigamesWonThisRun: 0,
       goldEarnedThisRun: 0,
       xpEarnedThisRun: 0,
+      outcome: 'in_progress',
     };
 
     this.gauntlet = generateGauntletRun();
@@ -333,6 +340,34 @@ export class GameEngine {
     );
   }
 
+  private awardGold(amount: number, fromX = 640, fromY = 340): void {
+    if (amount <= 0) return;
+    this.progress.gold += amount;
+    this.runSummary.goldEarnedThisRun += amount;
+    this.effects.spawnGoldGain(amount, fromX, fromY);
+  }
+
+  private awardXp(amount: number, fromX = 640, fromY = 374): void {
+    if (amount <= 0) return;
+    this.progress.xp += amount;
+    this.runSummary.xpEarnedThisRun += amount;
+    this.effects.spawnXpGain(amount, fromX, fromY);
+  }
+
+  private healPlayer(amount: number, label?: string): number {
+    if (amount <= 0 || this.player.hp >= this.player.maxHp) return 0;
+    const before = this.player.hp;
+    this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
+    const actual = this.player.hp - before;
+    if (actual > 0) {
+      this.effects.spawnHealFeedback(actual, 190, 598);
+      if (label && this.screen === 'combat') {
+        this.effects.spawnText(this.playerBody.pos.x, this.playerBody.pos.y, 72, `+${actual} HP`, '#69f0ae', 0.95, 0.75);
+      }
+    }
+    return actual;
+  }
+
   private applyPlayerIncomingDamage(rawDmg: number): number {
     const mitigated = Math.max(1, Math.round(rawDmg * (1 - this.stats.damageReduction)));
     let remaining = mitigated;
@@ -342,16 +377,15 @@ export class GameEngine {
       remaining -= absorbed;
     }
     this.player.hp = Math.max(0, this.player.hp - remaining);
+    if (remaining > 0) {
+      this.effects.spawnDamageFeedback(remaining, 190, 598);
+    }
     return remaining;
   }
 
   private triggerAdrenalineHeal(label?: string): void {
     if (this.stats.adrenalineHeal <= 0 || this.player.hp >= this.player.maxHp) return;
-    const heal = this.stats.adrenalineHeal;
-    this.player.hp = Math.min(this.player.maxHp, this.player.hp + heal);
-    if (label && this.screen === 'combat') {
-      this.effects.spawnText(this.playerBody.pos.x, this.playerBody.pos.y, 72, `+${heal} HP`, '#69f0ae', 0.9, 0.7);
-    }
+    this.healPlayer(this.stats.adrenalineHeal, label);
   }
 
   public selectRunBuff(buffId: string): void {
@@ -361,7 +395,7 @@ export class GameEngine {
     this.pendingBuffChoices = [];
     this.syncStatsFromProgress();
     if (chosen.healFlat) {
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + chosen.healFlat);
+      this.healPlayer(chosen.healFlat);
     }
     this.continuePathToNextBoss();
   }
@@ -375,8 +409,11 @@ export class GameEngine {
     this.runSummary = {
       tierReached: 1,
       bossesDefeatedThisRun: 0,
+      guardiansSlainThisRun: 0,
+      minigamesWonThisRun: 0,
       goldEarnedThisRun: 0,
       xpEarnedThisRun: 0,
+      outcome: 'in_progress',
     };
     this.player = this.createFreshPlayerCombatState();
     this.setupRoadForCurrentTier();
@@ -387,6 +424,7 @@ export class GameEngine {
 
   public continuePathToNextBoss(): void {
     if (this.currentTierIndex >= this.gauntlet.length - 1) {
+      this.runSummary.outcome = 'victory';
       this.screen = 'victory_run';
       this.notifyUI();
       return;
@@ -394,10 +432,7 @@ export class GameEngine {
     this.currentTierIndex += 1;
     this.runSummary.tierReached = this.currentTierIndex + 1;
     // Heal at the trail shrine between bosses (scaled by Vanguard's Resolve!)
-    this.player.hp = Math.min(
-      this.player.maxHp,
-      this.player.hp + Math.round(this.player.maxHp * this.stats.shrineHealPct)
-    );
+    this.healPlayer(Math.round(this.player.maxHp * this.stats.shrineHealPct));
     this.player.stamina = this.player.maxStamina;
     this.setupRoadForCurrentTier();
     this.pathState.shrineHealed = true;
@@ -663,14 +698,14 @@ export class GameEngine {
             this.effects.addShake(g.hp <= 0 ? (g.isMiniBoss ? 11 : 7) : strong ? 6 : 3, g.hp <= 0 ? 0.26 : 0.12);
             if (g.hp <= 0) {
               const bountyMul = this.getBountyBonusMultiplier();
-              const gold = Math.round(g.goldReward * bountyMul);
+              const gold = Math.max(1, Math.round(g.goldReward * bountyMul));
               const xp = Math.round(g.xpReward * bountyMul);
-              this.progress.gold += gold;
-              this.progress.xp += xp;
-              this.runSummary.goldEarnedThisRun += gold;
-              this.runSummary.xpEarnedThisRun += xp;
+              const popX = 640 + g.x * 0.8;
+              this.runSummary.guardiansSlainThisRun += 1;
+              this.awardGold(gold, popX, 410);
+              this.awardXp(xp, popX, 444);
               if (g.isMiniBoss) {
-                this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.2));
+                this.healPlayer(Math.round(this.player.maxHp * 0.2));
                 this.effects.addFlash('#ffea00', 0.35);
                 this.sound.playVictory();
               }
@@ -793,10 +828,14 @@ export class GameEngine {
               g.animElapsed = 0;
               if (g.hp <= 0) {
                 const bountyMul = this.getBountyBonusMultiplier();
-                this.progress.gold += Math.round(g.goldReward * bountyMul);
-                this.progress.xp += Math.round(g.xpReward * bountyMul);
+                const gold = Math.max(1, Math.round(g.goldReward * bountyMul));
+                const xp = Math.round(g.xpReward * bountyMul);
+                const popX = 640 + g.x * 0.8;
+                this.runSummary.guardiansSlainThisRun += 1;
+                this.awardGold(gold, popX, 410);
+                this.awardXp(xp, popX, 444);
                 if (g.isMiniBoss) {
-                  this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.2));
+                  this.healPlayer(Math.round(this.player.maxHp * 0.2));
                   this.sound.playVictory();
                 }
                 saveProgress(this.progress);
@@ -843,7 +882,7 @@ export class GameEngine {
       ) {
         hpPack.collected = true;
         const healAmt = Math.max(15, Math.round(this.player.maxHp * hpPack.healPct));
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmt);
+        this.healPlayer(healAmt);
         this.effects.addFlash('#69f0ae', 0.24);
         this.sound.playVictory();
       }
@@ -877,13 +916,12 @@ export class GameEngine {
       const bossInst = this.gauntlet[this.currentTierIndex] ?? this.gauntlet[0];
       if (won) {
         const bountyMul = this.getBountyBonusMultiplier();
-        const gold = Math.round(bossInst.stats.goldReward * (mg.kind === 'coin_catch' ? 0.45 : 0.3) * bountyMul);
+        const gold = Math.max(2, Math.round(bossInst.stats.goldReward * (mg.kind === 'coin_catch' ? 0.26 : 0.18) * bountyMul));
         const xp = Math.round(bossInst.stats.xpReward * 0.3 * bountyMul);
-        this.progress.gold += gold;
-        this.progress.xp += xp;
-        this.runSummary.goldEarnedThisRun += gold;
-        this.runSummary.xpEarnedThisRun += xp;
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.18));
+        this.runSummary.minigamesWonThisRun += 1;
+        this.awardGold(gold, 640, 320);
+        this.awardXp(xp, 640, 356);
+        this.healPlayer(Math.round(this.player.maxHp * 0.18));
         this.effects.addFlash('#69f0ae', 0.3);
         this.sound.playVictory();
         saveProgress(this.progress);
@@ -1077,6 +1115,7 @@ export class GameEngine {
         this.bossDefeatTimer = 0;
         if (this.currentTierIndex >= this.gauntlet.length - 1) {
           this.pendingBuffChoices = [];
+          this.runSummary.outcome = 'victory';
           this.screen = 'victory_run';
         } else {
           this.pendingBuffChoices = rollRunBuffChoices(3);
@@ -1087,12 +1126,12 @@ export class GameEngine {
       return;
     }
 
-    // Brief dramatic Player Defeat animation before opening Sanctuary
+    // Brief dramatic Player Defeat animation before showing Post-Run Summary
     if (this.playerDeathTimer > 0) {
       this.playerDeathTimer -= dt;
       if (this.playerDeathTimer <= 0) {
         this.playerDeathTimer = 0;
-        this.screen = 'sanctuary';
+        this.screen = 'run_summary';
         this.notifyUI();
       }
       return;
@@ -2032,18 +2071,16 @@ export class GameEngine {
     this.physics.clearHitboxesForOwner('boss');
 
     const bountyMul = this.getBountyBonusMultiplier();
-    const gold = Math.round(inst.stats.goldReward * bountyMul);
+    const gold = Math.max(3, Math.round(inst.stats.goldReward * bountyMul));
     const xp = Math.round(inst.stats.xpReward * bountyMul);
 
-    this.progress.gold += gold;
-    this.progress.xp += xp;
+    this.awardGold(gold, 640, 290);
+    this.awardXp(xp, 640, 326);
     this.progress.totalBossesDefeated += 1;
     this.progress.highestTierCleared = Math.max(this.progress.highestTierCleared, inst.template.tier);
     saveProgress(this.progress);
 
     this.runSummary.bossesDefeatedThisRun += 1;
-    this.runSummary.goldEarnedThisRun += gold;
-    this.runSummary.xpEarnedThisRun += xp;
     this.runSummary.lastBossReward = { gold, xp, bossName: inst.template.name };
 
     this.sound.playHit(true, true);
@@ -2153,8 +2190,11 @@ export class GameEngine {
       this.effects.spawnText(m.x, m.y, 44, `${dealt}`, m.hp <= 0 ? '#ffd54f' : '#ffffff', 0.95, 0.65);
       if (m.hp <= 0) {
         const bountyMul = this.getBountyBonusMultiplier();
-        this.progress.gold += Math.round(m.goldReward * bountyMul);
-        this.progress.xp += Math.round(m.xpReward * bountyMul);
+        const gold = Math.max(1, Math.round(m.goldReward * bountyMul));
+        const xp = Math.round(m.xpReward * bountyMul);
+        this.runSummary.guardiansSlainThisRun += 1;
+        this.awardGold(gold, 640 + m.x * 0.7, 360);
+        this.awardXp(xp, 640 + m.x * 0.7, 392);
         this.triggerAdrenalineHeal('kill');
         // 25% random chance for a boss-summoned minion to drop an Arena Health Pack!
         if (Math.random() < 0.25) {
@@ -2182,9 +2222,8 @@ export class GameEngine {
       }
       if (Math.hypot(this.playerBody.pos.x - pk.x, this.playerBody.pos.y - pk.y) < 54) {
         const healAmt = Math.max(18, Math.round(this.player.maxHp * pk.healPct));
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmt);
+        this.healPlayer(healAmt, 'pack');
         this.vfx.spawn('shrine_heal', this.playerBody.pos.x, this.playerBody.pos.y, 24, '#69f0ae', 1.1);
-        this.effects.spawnText(this.playerBody.pos.x, this.playerBody.pos.y, 68, `+${healAmt} HP`, '#69f0ae', 1.15, 0.85);
         this.effects.addFlash('#69f0ae', 0.2);
         this.sound.playVictory();
         this.arenaHealthPacks.splice(i, 1);
@@ -2288,18 +2327,16 @@ export class GameEngine {
     this.physics.clearHitboxesForOwner('player');
     this.physics.clearHitboxesForOwner('boss');
 
-    // Award partial bounty for damage dealt to the current boss so every attempt feels rewarding
-    const dmgRatio = 1 - this.boss.hp / Math.max(1, this.boss.maxHp);
-    const partialGold = Math.round(this.boss.instance.stats.goldReward * dmgRatio * 0.4);
+    // Award modest partial bounty for damage dealt to the current boss
+    const dmgRatio = this.screen === 'combat' ? 1 - this.boss.hp / Math.max(1, this.boss.maxHp) : 0;
+    const partialGold = Math.round(this.boss.instance.stats.goldReward * dmgRatio * 0.25);
     const partialXp = Math.round(this.boss.instance.stats.xpReward * dmgRatio * 0.45);
 
-    this.progress.gold += partialGold;
-    this.progress.xp += partialXp;
+    this.awardGold(partialGold, 640, 330);
+    this.awardXp(partialXp, 640, 365);
     this.progress.runCount += 1;
+    this.runSummary.outcome = 'defeat';
     saveProgress(this.progress);
-
-    this.runSummary.goldEarnedThisRun += partialGold;
-    this.runSummary.xpEarnedThisRun += partialXp;
 
     this.sound.playDeath();
     this.playerAnim.play('death', true, 1.25);
@@ -2307,7 +2344,7 @@ export class GameEngine {
       this.effects.spawnText(this.playerBody.pos.x, this.playerBody.pos.y, 76, 'FALLEN...', '#ff5252', 1.45, 1.2);
       this.playerDeathTimer = 1.35;
     } else {
-      this.screen = 'sanctuary';
+      this.screen = 'run_summary';
     }
     this.notifyUI();
   }

@@ -64,14 +64,15 @@ export class UIOverlay {
       html += this.renderTaleOfTape();
     } else if (e.screen === 'victory_boss') {
       html += this.renderBossVictory();
-    } else if (e.screen === 'victory_run') {
-      html += this.renderRunVictory();
+    } else if (e.screen === 'victory_run' || e.screen === 'run_summary') {
+      html += this.renderRunSummary(e.screen === 'victory_run');
     } else if (e.screen === 'sanctuary') {
       html += this.renderSanctuary();
     }
 
     this.container.innerHTML = html;
     this.bindEvents();
+    this.animateCountUpNumbers();
     this.touchControls.syncVisibility();
 
     const nextScrollEl = this.container.querySelector<HTMLElement>('.shop-scroll');
@@ -278,27 +279,80 @@ export class UIOverlay {
     `;
   }
 
-  private renderRunVictory(): string {
+  private renderRunSummary(isVictory: boolean): string {
     const s = this.engine.runSummary;
+    const p = this.engine.progress;
+    const badge = isVictory
+      ? `All ${this.engine.gauntlet.length} Tiers Conquered`
+      : `Run Complete • Reached Tier ${s.tierReached} of ${this.engine.gauntlet.length}`;
+    const headline = isVictory ? 'Eternal Champion' : 'Fallen on the Trail';
+    const subtext = isVictory
+      ? 'You have felled Aurelion, the Eternal Sovereign, through pure swordsmanship!'
+      : 'Your blade rests, yet every coin and lesson strengthens your steel at the Sanctuary.';
+
     return `
       <div class="overlay-screen">
-        <div class="card" style="text-align:center;max-width:660px;">
-          <div class="tape-tier">All ${this.engine.gauntlet.length} Tiers Conquered</div>
-          <div class="title-logo" style="font-size:38px;margin:6px 0;">Eternal Champion</div>
-          <p style="color:#e2e8f0;font-size:15px;margin:12px 0;">
-            You have felled Aurelion, the Eternal Sovereign, through pure swordsmanship!
-          </p>
-          <p style="color:#cbd5e1;font-size:14px;">
-            Run Bounty: <span class="currency-gold">+${s.goldEarnedThisRun} Gold</span> &nbsp;•&nbsp;
-            <span class="currency-xp">+${s.xpEarnedThisRun} XP</span>
-          </p>
+        <div class="card run-summary-card" style="text-align:center;max-width:680px;">
+          <div class="tape-tier">${badge}</div>
+          <div class="title-logo" style="font-size:36px;margin:6px 0;${isVictory ? '' : 'color:#ff8a80;'}">${headline}</div>
+          <p style="color:#cbd5e1;font-size:14px;margin:8px 0 18px;">${subtext}</p>
+
+          <div class="reward-showcase">
+            <div class="reward-pill reward-gold">
+              <div class="reward-label">Gold Earned This Run</div>
+              <div class="reward-value currency-gold">+<span data-countup="${s.goldEarnedThisRun}">0</span>g</div>
+              <div class="reward-total">Vault Total: ${p.gold}g</div>
+            </div>
+            <div class="reward-pill reward-xp">
+              <div class="reward-label">XP Earned This Run</div>
+              <div class="reward-value currency-xp">+<span data-countup="${s.xpEarnedThisRun}">0</span> XP</div>
+              <div class="reward-total">Total XP: ${p.xp} XP</div>
+            </div>
+          </div>
+
+          <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
+            <div class="stat-box">
+              <div class="stat-label">Bosses Felled</div>
+              <div class="stat-val">${s.bossesDefeatedThisRun}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Guardians Slain</div>
+              <div class="stat-val">${s.guardiansSlainThisRun}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Minigames Won</div>
+              <div class="stat-val">${s.minigamesWonThisRun}</div>
+            </div>
+          </div>
+
           <div class="btn-row">
             <button class="btn btn-primary" data-action="open-sanctuary">Visit Sanctuary Forge</button>
-            <button class="btn btn-secondary" data-action="start-run">Start Freshly Rolled Gauntlet</button>
+            <button class="btn btn-secondary" data-action="start-run">Start New Run</button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  private animateCountUpNumbers(): void {
+    const els = this.container.querySelectorAll<HTMLElement>('[data-countup]');
+    if (els.length === 0) return;
+    els.forEach((el) => {
+      const target = Math.max(0, Number(el.dataset.countup ?? 0));
+      if (target <= 0) {
+        el.textContent = '0';
+        return;
+      }
+      const start = performance.now();
+      const duration = 750;
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = String(Math.round(target * eased));
+        if (t < 1 && el.isConnected) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
   }
 
   private renderSanctuary(): string {

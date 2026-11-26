@@ -511,9 +511,10 @@ export function computePlayerStats(progress: PlayerProgress, baseMoveSpeed: numb
     maxHp: Math.round(
       (110 + d('vitality') * 85 + gearD * 36 + d('second_breath') * 32 + d('war_banner') * 40 + d('pet_bear') * 45) *
         (1 + d('vitality') * 0.08) *
-        maxedBonus
+        maxedBonus *
+        0.9
     ),
-    baseAttack: Math.round(rawAtk * styleAtkMul * maxedBonus * 0.95),
+    baseAttack: Math.round(rawAtk * styleAtkMul * maxedBonus * 0.95 * 0.85),
     maxStamina: Math.round(100 + d('stamina') * 34),
     staminaRegen: 32 * (1 + d('stamina') * 0.16 + d('second_breath') * 0.14) * (style.id === 'gale' ? 1.18 : 1.0),
     parryWindowBonus: d('parry') * 0.02 + styleParrySec,
@@ -533,7 +534,7 @@ export function computePlayerStats(progress: PlayerProgress, baseMoveSpeed: numb
     startingGritShield: Math.round(d('shrine') * 42 + d('war_banner') * 36),
     bountyMultiplier: 1 + d('greed') * 0.24 + d('war_banner') * 0.14,
     petLevel: totalPetLv,
-    petDamage: totalPetLv > 0 ? Math.round((22 + petD * 34) * (1 + petD * 0.08) * maxedBonus) : 0,
+    petDamage: totalPetLv > 0 ? Math.round((22 + petD * 34) * (1 + petD * 0.08) * maxedBonus * 0.85) : 0,
   };
 }
 

@@ -70,7 +70,7 @@ export function generateBossInstance(tierIndex: number, seed?: number): BossInst
     attackSpeedMul: Number(spdMul.toFixed(2)),
     moveSpeed: Math.round(template.baseMoveSpeed * (0.5 + spdMul * 0.5)),
     aggression: Number((template.baseAggression * aggMul).toFixed(2)),
-    goldReward: Math.round(template.baseGold * goldMul * bountyScale),
+    goldReward: Math.max(4, Math.round(template.baseGold * goldMul * bountyScale * 0.42)),
     xpReward: Math.round(template.baseXp * xpMul * bountyScale),
     variancePct: {
       hp: Math.round((hpMul - 1) * 100),

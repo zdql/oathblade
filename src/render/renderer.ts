@@ -13,6 +13,9 @@ export class GameRenderer {
   private width: number;
   private height: number;
   private clock = 0;
+  private displayHp = -1;
+  private displayGold = -1;
+  private displayXp = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -37,6 +40,27 @@ export class GameRenderer {
 
   public render(engine: GameEngine, dt: number): void {
     this.clock += dt;
+
+    // Smoothly interpolate HUD counters & trailing HP bar
+    const lerpRate = Math.min(1, dt * 8.5);
+    const targetHp = engine.player ? engine.player.hp : 0;
+    if (this.displayHp < 0 || Math.abs(this.displayHp - targetHp) > engine.player.maxHp * 0.9) {
+      this.displayHp = targetHp;
+    } else {
+      this.displayHp += (targetHp - this.displayHp) * Math.min(1, dt * 5.2);
+      if (Math.abs(this.displayHp - targetHp) < 0.4) this.displayHp = targetHp;
+    }
+    if (this.displayGold < 0) this.displayGold = engine.progress.gold;
+    else {
+      this.displayGold += (engine.progress.gold - this.displayGold) * lerpRate;
+      if (Math.abs(this.displayGold - engine.progress.gold) < 0.5) this.displayGold = engine.progress.gold;
+    }
+    if (this.displayXp < 0) this.displayXp = engine.progress.xp;
+    else {
+      this.displayXp += (engine.progress.xp - this.displayXp) * lerpRate;
+      if (Math.abs(this.displayXp - engine.progress.xp) < 0.5) this.displayXp = engine.progress.xp;
+    }
+
     const ctx = this.ctx;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -69,12 +93,36 @@ export class GameRenderer {
       }
     }
 
+    // Damage / Heal Edge Vignette Pulse
+    if (engine.effects.vignetteAlpha > 0.01) {
+      const grad = ctx.createRadialGradient(
+        this.width * 0.5,
+        this.height * 0.5,
+        this.height * 0.28,
+        this.width * 0.5,
+        this.height * 0.5,
+        this.width * 0.62
+      );
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, engine.effects.vignetteColor);
+      ctx.save();
+      ctx.globalAlpha = engine.effects.vignetteAlpha;
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.restore();
+    }
+
     // Screen Flash
     if (engine.effects.flashAlpha > 0.01) {
       ctx.fillStyle = engine.effects.flashColor;
       ctx.globalAlpha = engine.effects.flashAlpha;
       ctx.fillRect(0, 0, this.width, this.height);
       ctx.globalAlpha = 1;
+    }
+
+    // Screen-Space HUD Animations (flying gold coins, XP orbs, heal sparkles & popups)
+    if (engine.screen === 'path' || engine.screen === 'combat') {
+      this.renderHudAnimations(engine);
     }
 
     ctx.restore();
@@ -345,37 +393,8 @@ export class GameRenderer {
     ctx.fillStyle = bossInst.template.palette.accent;
     ctx.fillRect(barX, 78, barW * progress, 6);
 
-    // Bottom-left mini HP & Run Buffs on the Road
-    ctx.fillStyle = 'rgba(12, 14, 20, 0.82)';
-    ctx.beginPath();
-    ctx.roundRect(22, this.height - 76, 260, 56, 10);
-    ctx.fill();
-    ctx.fillStyle = '#ef5350';
-    ctx.font = '700 13px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`HP: ${engine.player.hp}/${engine.player.maxHp}   •   Gold: ${engine.progress.gold}`, 34, this.height - 52);
-    ctx.fillStyle = '#69f0ae';
-    ctx.font = '600 11px system-ui, sans-serif';
-    const buffText =
-      engine.activeRunBuffs.length > 0
-        ? `Run Buffs: ${engine.activeRunBuffs.map((b) => b.name).join(', ')}`
-        : 'Defeat bosses to earn Run Buffs!';
-    ctx.fillText(buffText.slice(0, 42), 34, this.height - 32);
-
-    ctx.fillStyle = 'rgba(12, 14, 20, 0.82)';
-    ctx.beginPath();
-    ctx.roundRect(this.width * 0.5 - 245, this.height - 54, 490, 36, 10);
-    ctx.fill();
-    ctx.fillStyle = '#f1f5f9';
-    ctx.font = '600 13px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      remaining > 0
-        ? 'W/A/S/D Move  •  K/J Slay Road Guardians  •  L Parry / Dodge'
-        : 'Road Clear! Hold W or press SPACE / ENTER to enter the Boss Gate',
-      this.width * 0.5,
-      this.height - 31
-    );
+    // Normalized Player HUD (identical layout & animations across Road and Boss Combat!)
+    this.renderNormalizedPlayerHud(engine, 'path');
 
     // Interactive Roadside Minigame Overlay (drawn crisply on canvas when active!)
     if (engine.activeRoadMinigame && engine.activeRoadMinigame.active) {
@@ -780,85 +799,6 @@ export class GameRenderer {
       ctx.fillText(b.tellLabel, this.width * 0.5, 117);
     }
 
-    // ---- BOTTOM LEFT: ZELDA HEARTS & STAMINA PLATE ----
-    ctx.fillStyle = 'rgba(14, 16, 24, 0.88)';
-    ctx.beginPath();
-    ctx.roundRect(22, this.height - 102, 316, 82, 10);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 213, 79, 0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    const maxHeartsToDraw = Math.min(10, Math.ceil(p.maxHp / 25));
-    const hpPerHeart = p.maxHp / maxHeartsToDraw;
-    for (let i = 0; i < maxHeartsToDraw; i++) {
-      const hx = 40 + i * 24;
-      const hy = this.height - 76;
-      const heartHp = Math.max(0, Math.min(hpPerHeart, p.hp - i * hpPerHeart));
-      drawHeart(ctx, hx, hy, 8.5, heartHp / hpPerHeart);
-    }
-
-    ctx.fillStyle = '#f1f5f9';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${p.hp}/${p.maxHp}`, 326, this.height - 71);
-
-    ctx.fillStyle = '#1a2b22';
-    ctx.fillRect(36, this.height - 48, 288, 12);
-    ctx.fillStyle = p.stamina < 20 ? '#ffab40' : '#69f0ae';
-    ctx.fillRect(36, this.height - 48, 288 * Math.max(0, p.stamina / p.maxStamina), 12);
-    ctx.fillStyle = '#b0bec5';
-    ctx.font = '600 10px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('STAMINA', 36, this.height - 24);
-
-    if (p.counterWindowTimer > 0) {
-      ctx.fillStyle = '#ffd740';
-      ctx.font = '800 12px system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText('COUNTER READY! (J / K)', 324, this.height - 24);
-    } else if (p.heavyAttackCooldown > 0) {
-      ctx.fillStyle = '#ffab91';
-      ctx.font = '700 11px system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(`HEAVY (J): ${p.heavyAttackCooldown.toFixed(1)}s`, 324, this.height - 24);
-    } else {
-      ctx.fillStyle = '#69f0ae';
-      ctx.font = '700 11px system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText('HEAVY (J): READY', 324, this.height - 24);
-    }
-
-    // ---- BOTTOM RIGHT: COMBO TRACKER & CONTROLS ----
-    ctx.fillStyle = 'rgba(14, 16, 24, 0.88)';
-    ctx.beginPath();
-    ctx.roundRect(this.width - 344, this.height - 102, 322, 82, 10);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(123, 227, 255, 0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffd54f';
-    ctx.font = '700 12px system-ui, sans-serif';
-    const bufStr = p.inputBuffer.length > 0 ? p.inputBuffer.join(' → ') : 'Ready';
-    ctx.fillText(`COMBO CHAIN: ${bufStr}`, this.width - 328, this.height - 76);
-
-    if (p.comboHints.length > 0) {
-      const hint = p.comboHints[0];
-      ctx.fillStyle = hint.accentColor;
-      ctx.font = '600 12px system-ui, sans-serif';
-      ctx.fillText(`Next: ${hint.name} (${hint.sequence.join('→')})`, this.width - 328, this.height - 55);
-    } else {
-      ctx.fillStyle = '#90a4ae';
-      ctx.font = '600 11px system-ui, sans-serif';
-      ctx.fillText('WASD Move • K Quick • J Strong • L Parry / +WASD Dodge', this.width - 328, this.height - 55);
-    }
-
-    ctx.fillStyle = '#b0bec5';
-    ctx.font = '600 11px system-ui, sans-serif';
-    ctx.fillText(`Gold: ${engine.progress.gold}  •  XP: ${engine.progress.xp}  •  F1 Physics Lab`, this.width - 328, this.height - 32);
-
     if (p.lastComboBanner) {
       ctx.save();
       ctx.globalAlpha = Math.min(1, p.lastComboBanner.timer * 1.5);
@@ -867,15 +807,137 @@ export class GameRenderer {
       ctx.textAlign = 'center';
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       ctx.lineWidth = 5;
-      ctx.strokeText(`✦ ${p.lastComboBanner.name.toUpperCase()} ✦`, this.width * 0.5, this.height - 124);
-      ctx.fillText(`✦ ${p.lastComboBanner.name.toUpperCase()} ✦`, this.width * 0.5, this.height - 124);
+      ctx.strokeText(`✦ ${p.lastComboBanner.name.toUpperCase()} ✦`, this.width * 0.5, this.height - 134);
+      ctx.fillText(`✦ ${p.lastComboBanner.name.toUpperCase()} ✦`, this.width * 0.5, this.height - 134);
       ctx.restore();
     }
 
-    // Active Run-Only Buff Badges above player HUD
+    ctx.restore();
+
+    // Normalized Player HUD (identical layout & animations across Road and Boss Combat!)
+    this.renderNormalizedPlayerHud(engine, 'combat');
+  }
+
+  private renderNormalizedPlayerHud(engine: GameEngine, mode: 'path' | 'combat'): void {
+    const ctx = this.ctx;
+    const p = engine.player;
+    const fx = engine.effects;
+
+    ctx.save();
+
+    // ---- BOTTOM LEFT: NORMALIZED VITALITY, ANIMATED HP BAR & STAMINA PLATE ----
+    const plateW = 340;
+    const plateH = 98;
+    const baseLeftX = 20;
+    const baseY = this.height - plateH - 16;
+
+    const shakeX = fx.hpShake > 0 ? Math.round((Math.random() - 0.5) * 10 * fx.hpShake) : 0;
+    const shakeY = fx.hpShake > 0 ? Math.round((Math.random() - 0.5) * 6 * fx.hpShake) : 0;
+    const lx = baseLeftX + shakeX;
+    const ly = baseY + shakeY;
+
+    ctx.fillStyle = 'rgba(14, 16, 24, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(lx, ly, plateW, plateH, 10);
+    ctx.fill();
+
+    // Dynamic border glow on heal (emerald) or damage (crimson)
+    if (fx.hpDamageFlash > 0.05) {
+      ctx.fillStyle = `rgba(255, 23, 68, ${fx.hpDamageFlash * 0.24})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 82, 82, ${0.55 + fx.hpDamageFlash * 0.45})`;
+      ctx.lineWidth = 2.4;
+    } else if (fx.hpHealGlow > 0.05) {
+      ctx.fillStyle = `rgba(105, 240, 174, ${fx.hpHealGlow * 0.2})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(105, 240, 174, ${0.55 + fx.hpHealGlow * 0.45})`;
+      ctx.lineWidth = 2.4;
+    } else {
+      ctx.strokeStyle = 'rgba(255, 213, 79, 0.55)';
+      ctx.lineWidth = 1.6;
+    }
+    ctx.stroke();
+
+    // Hearts row
+    const maxHeartsToDraw = Math.min(10, Math.ceil(p.maxHp / 25));
+    const hpPerHeart = p.maxHp / maxHeartsToDraw;
+    const heartPulse = fx.hpHealGlow > 0 ? 1 + Math.sin(fx.hpHealGlow * Math.PI) * 0.16 : 1;
+    for (let i = 0; i < maxHeartsToDraw; i++) {
+      const hx = lx + 18 + i * 22;
+      const hy = ly + 19;
+      const heartHp = Math.max(0, Math.min(hpPerHeart, p.hp - i * hpPerHeart));
+      drawHeart(ctx, hx, hy, 7.6 * heartPulse, heartHp / hpPerHeart);
+    }
+
+    // Numeric HP + Grit Shield
+    ctx.fillStyle = fx.hpDamageFlash > 0.2 ? '#ff8a80' : fx.hpHealGlow > 0.2 ? '#69f0ae' : '#f1f5f9';
+    ctx.font = '800 12px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    const gritStr = p.gritShield > 0 ? ` (+${p.gritShield})` : '';
+    ctx.fillText(`${p.hp}/${p.maxHp}${gritStr}`, lx + plateW - 12, ly + 23);
+
+    // Smooth Animated HP Bar with trailing damage / heal surge ghost!
+    const hpBarX = lx + 12;
+    const hpBarY = ly + 33;
+    const hpBarW = plateW - 24;
+    const hpBarH = 12;
+    const actualHpRatio = Math.max(0, Math.min(1, p.hp / Math.max(1, p.maxHp)));
+    const dispHpRatio = Math.max(0, Math.min(1, this.displayHp / Math.max(1, p.maxHp)));
+
+    ctx.fillStyle = '#25151a';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+    if (dispHpRatio > actualHpRatio) {
+      // Trailing white/amber damage drain bar
+      ctx.fillStyle = '#ffca28';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * dispHpRatio, hpBarH);
+      ctx.fillStyle = actualHpRatio > 0.3 ? '#ef5350' : '#ff1744';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * actualHpRatio, hpBarH);
+    } else if (actualHpRatio > dispHpRatio) {
+      // Surging emerald heal bar
+      ctx.fillStyle = '#69f0ae';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * actualHpRatio, hpBarH);
+      ctx.fillStyle = '#ef5350';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * dispHpRatio, hpBarH);
+    } else {
+      ctx.fillStyle = actualHpRatio > 0.3 ? '#ef5350' : '#ff1744';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * actualHpRatio, hpBarH);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+
+    // Stamina Bar
+    const stamY = ly + 53;
+    ctx.fillStyle = '#16261f';
+    ctx.fillRect(hpBarX, stamY, hpBarW, 10);
+    ctx.fillStyle = p.stamina < 20 ? '#ffab40' : '#69f0ae';
+    ctx.fillRect(hpBarX, stamY, hpBarW * Math.max(0, Math.min(1, p.stamina / Math.max(1, p.maxStamina))), 10);
+
+    // Bottom status line (Stamina + Quick/Heavy cooldown or Counter)
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('VITALITY & STAMINA', hpBarX, ly + 82);
+
+    const qCd = mode === 'combat' ? p.quickAttackCooldown : engine.pathAttackCooldown;
+    const hCd = mode === 'combat' ? p.heavyAttackCooldown : engine.pathHeavyCooldown;
+    ctx.textAlign = 'right';
+    if (mode === 'combat' && p.counterWindowTimer > 0) {
+      ctx.fillStyle = '#ffd740';
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.fillText('COUNTER READY! (J / K)', lx + plateW - 12, ly + 82);
+    } else {
+      ctx.fillStyle = hCd > 0 ? '#ffab91' : '#69f0ae';
+      ctx.font = '700 10px system-ui, sans-serif';
+      const kStr = qCd > 0 ? `K:${qCd.toFixed(1)}s` : 'K:RDY';
+      const jStr = hCd > 0 ? `J:${hCd.toFixed(1)}s` : 'J:RDY';
+      ctx.fillText(`${kStr}  •  ${jStr}`, lx + plateW - 12, ly + 82);
+    }
+
+    // Active Run-Only Buff Badges above Bottom-Left Plate (identical in Road & Combat!)
     if (engine.activeRunBuffs.length > 0) {
-      let bx = 22;
-      const by = this.height - 126;
+      let bx = baseLeftX;
+      const by = baseY - 26;
       ctx.font = '700 11px system-ui, sans-serif';
       ctx.textAlign = 'left';
       for (const buff of engine.activeRunBuffs) {
@@ -891,6 +953,175 @@ export class GameRenderer {
         ctx.fillText(buff.name, bx + 8, by + 14);
         bx += tw + 6;
       }
+    }
+
+    // ---- BOTTOM RIGHT: NORMALIZED GOLD, XP & ACTION/COMBO PLATE ----
+    const rx = this.width - plateW - 20;
+    const ry = baseY;
+    ctx.fillStyle = 'rgba(14, 16, 24, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(rx, ry, plateW, plateH, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(123, 227, 255, 0.48)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Animated Gold Pill (left half of top row)
+    const pillW = 152;
+    const pillH = 34;
+    const goldScale = 1 + Math.sin(fx.goldPulse * Math.PI) * 0.1;
+    ctx.save();
+    ctx.translate(rx + 12 + pillW / 2, ry + 10 + pillH / 2);
+    ctx.scale(goldScale, goldScale);
+    ctx.fillStyle = fx.goldPulse > 0.05 ? `rgba(255, 215, 64, ${0.14 + fx.goldPulse * 0.24})` : 'rgba(255, 215, 64, 0.1)';
+    ctx.beginPath();
+    ctx.roundRect(-pillW / 2, -pillH / 2, pillW, pillH, 8);
+    ctx.fill();
+    ctx.strokeStyle = fx.goldPulse > 0.05 ? '#ffea00' : 'rgba(255, 213, 79, 0.45)';
+    ctx.lineWidth = fx.goldPulse > 0.05 ? 2 : 1.2;
+    ctx.stroke();
+
+    // Pixel gold coin icon
+    ctx.fillStyle = '#ffd740';
+    ctx.beginPath();
+    ctx.arc(-pillW / 2 + 17, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff9c4';
+    ctx.fillRect(-pillW / 2 + 14, -4, 3, 4);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd54f';
+    ctx.font = '800 14px system-ui, sans-serif';
+    ctx.fillText(`${Math.round(this.displayGold)}g`, -pillW / 2 + 31, 5);
+    if (fx.recentGoldTimer > 0 && fx.recentGoldDelta > 0) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fff59d';
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.fillText(`+${fx.recentGoldDelta}`, pillW / 2 - 8, 4);
+    }
+    ctx.restore();
+
+    // Animated XP Pill (right half of top row)
+    const xpScale = 1 + Math.sin(fx.xpPulse * Math.PI) * 0.1;
+    ctx.save();
+    ctx.translate(rx + plateW - 12 - pillW / 2, ry + 10 + pillH / 2);
+    ctx.scale(xpScale, xpScale);
+    ctx.fillStyle = fx.xpPulse > 0.05 ? `rgba(123, 227, 255, ${0.14 + fx.xpPulse * 0.24})` : 'rgba(123, 227, 255, 0.1)';
+    ctx.beginPath();
+    ctx.roundRect(-pillW / 2, -pillH / 2, pillW, pillH, 8);
+    ctx.fill();
+    ctx.strokeStyle = fx.xpPulse > 0.05 ? '#80ffff' : 'rgba(123, 227, 255, 0.45)';
+    ctx.lineWidth = fx.xpPulse > 0.05 ? 2 : 1.2;
+    ctx.stroke();
+
+    // XP diamond/star icon
+    ctx.fillStyle = '#7be3ff';
+    ctx.beginPath();
+    ctx.moveTo(-pillW / 2 + 17, -8);
+    ctx.lineTo(-pillW / 2 + 24, 0);
+    ctx.lineTo(-pillW / 2 + 17, 8);
+    ctx.lineTo(-pillW / 2 + 10, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7be3ff';
+    ctx.font = '800 14px system-ui, sans-serif';
+    ctx.fillText(`${Math.round(this.displayXp)} XP`, -pillW / 2 + 30, 5);
+    if (fx.recentXpTimer > 0 && fx.recentXpDelta > 0) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#e0f7fa';
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.fillText(`+${fx.recentXpDelta}`, pillW / 2 - 8, 4);
+    }
+    ctx.restore();
+
+    // Lower contextual info inside Bottom-Right Plate
+    ctx.textAlign = 'left';
+    if (mode === 'combat') {
+      ctx.fillStyle = '#ffd54f';
+      ctx.font = '700 11px system-ui, sans-serif';
+      const bufStr = p.inputBuffer.length > 0 ? p.inputBuffer.join(' → ') : 'Ready';
+      ctx.fillText(`COMBO: ${bufStr}`, rx + 14, ry + 64);
+
+      if (p.comboHints.length > 0) {
+        const hint = p.comboHints[0];
+        ctx.fillStyle = hint.accentColor;
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.fillText(`Next: ${hint.name} (${hint.sequence.join('→')})`, rx + 14, ry + 83);
+      } else {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.fillText('WASD Move • K Quick • J Strong • L Parry/Dodge', rx + 14, ry + 83);
+      }
+    } else {
+      const remG = engine.roadGuardians.filter((g) => g.state !== 'dead').length;
+      const doneM = engine.roadMinigames.filter((m) => m.completed).length;
+      const totalM = engine.roadMinigames.length;
+      ctx.fillStyle = remG === 0 && doneM === totalM ? '#69f0ae' : '#ffd54f';
+      ctx.font = '700 11px system-ui, sans-serif';
+      ctx.fillText(
+        remG === 0 && doneM === totalM
+          ? 'ROAD CLEAR! Hold W or SPACE for Boss Gate'
+          : `GUARDIANS: ${remG} LEFT  •  MINIGAMES: ${doneM}/${totalM}`,
+        rx + 14,
+        ry + 64
+      );
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.fillText('WASD Move • K Quick • J Strong • L Parry/Dodge', rx + 14, ry + 83);
+    }
+
+    ctx.restore();
+  }
+
+  private renderHudAnimations(engine: GameEngine): void {
+    const ctx = this.ctx;
+    const fx = engine.effects;
+    ctx.save();
+
+    // Flying Gold Coins, XP Orbs, and Heal Sparkles arcing into HUD counters
+    for (const f of fx.hudFlyers) {
+      const t = 1 - f.life / f.maxLife;
+      const ease = 1 - Math.pow(1 - t, 2.2);
+      const x = f.startX + (f.targetX - f.startX) * ease;
+      const y = f.startY + (f.targetY - f.startY) * ease - Math.sin(t * Math.PI) * f.arcHeight;
+      ctx.globalAlpha = Math.min(1, (1 - t) * 2.5);
+      if (f.kind === 'gold') {
+        ctx.fillStyle = '#ffd740';
+        ctx.beginPath();
+        ctx.arc(x, y, f.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 2, y - 3, 2, 2);
+      } else if (f.kind === 'xp') {
+        ctx.fillStyle = '#7be3ff';
+        ctx.beginPath();
+        ctx.moveTo(x, y - f.size);
+        ctx.lineTo(x + f.size, y);
+        ctx.lineTo(x, y + f.size);
+        ctx.lineTo(x - f.size, y);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#69f0ae';
+        ctx.fillRect(x - 2, y - f.size, 4, f.size * 2);
+        ctx.fillRect(x - f.size, y - 2, f.size * 2, 4);
+      }
+    }
+
+    // Floating Screen-Space HUD Popups (+Gold, +XP, +HP, -HP)
+    for (const pop of fx.hudPopups) {
+      const alpha = Math.min(1, (pop.life / pop.maxLife) * 1.6);
+      const popScale = pop.scale * (1 + (1 - pop.life / pop.maxLife) * 0.12);
+      ctx.globalAlpha = alpha;
+      ctx.font = `900 ${Math.round(18 * popScale)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+      ctx.lineWidth = 4;
+      ctx.strokeText(pop.text, pop.x, pop.y);
+      ctx.fillStyle = pop.color;
+      ctx.fillText(pop.text, pop.x, pop.y);
     }
 
     ctx.restore();
