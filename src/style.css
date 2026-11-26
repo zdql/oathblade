@@ -14,6 +14,8 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -453,6 +455,14 @@ button,
 /* ============================================================================
  * MULTI-TOUCH GAMEPAD & MOBILE / IPAD RESPONSIVE OPTIMIZATION
  * ========================================================================== */
+#touch-controls,
+#touch-controls * {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 #touch-controls {
   position: absolute;
   inset: 0;

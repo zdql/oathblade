@@ -20,24 +20,14 @@ function bootstrap(): void {
 
   engine.input.attach();
 
-  // Prevent iOS Safari double-tap-to-zoom and pinch-zoom during fast taps
-  let lastTouchEnd = 0;
-  document.addEventListener(
-    'touchend',
-    (e) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
-        return;
-      }
-      const now = Date.now();
-      if (now - lastTouchEnd <= 320) {
-        e.preventDefault();
-      }
-      lastTouchEnd = now;
-    },
-    { passive: false }
-  );
+  // Bulletproof iOS/iPadOS Safari zoom lock:
+  // 1) Prevent touchstart/touchend default on the canvas so rapid tapping never zooms.
+  // 2) Prevent pinch-zoom gestures across the document.
+  canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
   document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
   document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
   let lastTime = performance.now();

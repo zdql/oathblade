@@ -75,6 +75,12 @@ export class TouchControls {
     this.dpadEl = this.root.querySelector('#touch-dpad');
     this.knobEl = this.root.querySelector('#touch-knob');
 
+    // Bulletproof iOS/iPadOS Safari fix: prevent default on touchstart/touchend
+    // inside the touch gamepad so rapid tapping K/J/L NEVER triggers double-tap zoom!
+    this.root.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    this.root.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    this.root.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+
     if (this.dpadEl) {
       const updateStick = (clientX: number, clientY: number) => {
         if (!this.dpadEl || !this.knobEl) return;
