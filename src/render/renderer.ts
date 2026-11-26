@@ -378,7 +378,7 @@ export class GameRenderer {
     );
 
     // Interactive Roadside Minigame Overlay (drawn crisply on canvas when active!)
-    if (engine.roadMinigame && engine.roadMinigame.active) {
+    if (engine.activeRoadMinigame && engine.activeRoadMinigame.active) {
       this.renderRoadMinigame(engine);
     }
     ctx.restore();
@@ -386,12 +386,13 @@ export class GameRenderer {
 
   private renderRoadMinigame(engine: GameEngine): void {
     const ctx = this.ctx;
-    const mg = engine.roadMinigame;
+    const mg = engine.activeRoadMinigame;
+    if (!mg) return;
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(8, 10, 16, 0.88)';
+    ctx.fillStyle = 'rgba(8, 10, 16, 0.9)';
     ctx.beginPath();
     ctx.roundRect(cx - 280, cy - 135, 560, 270, 14);
     ctx.fill();
@@ -417,10 +418,8 @@ export class GameRenderer {
       const bx = cx - barW / 2;
       ctx.fillStyle = '#263238';
       ctx.fillRect(bx, cy - 8, barW, 28);
-      // Gold sweet spot
       ctx.fillStyle = '#ffd54f';
       ctx.fillRect(cx - barW * 0.14, cy - 8, barW * 0.28, 28);
-      // Moving hammer cursor
       const curX = bx + mg.cursor * barW;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(curX - 5, cy - 16, 10, 44);
@@ -447,24 +446,44 @@ export class GameRenderer {
       ctx.fillStyle = '#69f0ae';
       ctx.font = '700 14px system-ui, sans-serif';
       ctx.fillText(`Deflected: ${mg.score} / ${mg.targetScore}`, cx, cy + 88);
-    } else if (mg.kind === 'boulder_dodge') {
+    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch') {
       const laneW = 110;
       const startX = cx - laneW * 1.5;
       for (let i = 0; i < 3; i++) {
         ctx.fillStyle = i === mg.playerLane ? 'rgba(105, 240, 174, 0.22)' : 'rgba(255,255,255,0.06)';
         ctx.fillRect(startX + i * laneW + 4, cy - 28, laneW - 8, 128);
       }
-      // Player marker
       ctx.fillStyle = '#69f0ae';
       ctx.fillRect(startX + mg.playerLane * laneW + laneW / 2 - 14, cy + 72, 28, 22);
-      // Tumbling boulders
-      ctx.fillStyle = '#ff9100';
+      ctx.fillStyle = mg.kind === 'coin_catch' ? '#ffd740' : '#ff9100';
       for (const b of mg.lanes) {
         if (b.y < 0) continue;
         ctx.beginPath();
         ctx.arc(startX + b.lane * laneW + laneW / 2, cy - 20 + b.y * 105, 16, 0, Math.PI * 2);
         ctx.fill();
       }
+      if (mg.kind === 'coin_catch') {
+        ctx.fillStyle = '#ffd740';
+        ctx.font = '700 14px system-ui, sans-serif';
+        ctx.fillText(`Caught: ${mg.score} / ${mg.targetScore}`, cx, cy + 116);
+      }
+    } else if (mg.kind === 'blade_clash') {
+      const barW = 420;
+      const bx = cx - barW / 2;
+      ctx.fillStyle = '#3b151a';
+      ctx.fillRect(bx, cy - 6, barW, 30);
+      ctx.fillStyle = '#69f0ae';
+      ctx.fillRect(bx, cy - 6, barW * mg.cursor, 30);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 15px system-ui, sans-serif';
+      ctx.fillText(`MASH K / J  (${Math.round(mg.cursor * 100)}%)`, cx, cy + 56);
+    } else if (mg.kind === 'stance_mirror') {
+      ctx.fillStyle = '#80deea';
+      ctx.font = '900 44px system-ui, sans-serif';
+      ctx.fillText(mg.stanceDir, cx, cy + 28);
+      ctx.fillStyle = '#69f0ae';
+      ctx.font = '700 15px system-ui, sans-serif';
+      ctx.fillText(`Matched: ${mg.score} / ${mg.targetScore}`, cx, cy + 78);
     } else {
       ctx.fillStyle = '#ffd54f';
       ctx.font = '900 54px system-ui, sans-serif';

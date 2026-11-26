@@ -136,7 +136,13 @@ export type RoadMinigameKind =
   | 'anvil_timing'
   | 'parry_gauntlet'
   | 'boulder_dodge'
-  | 'target_slash';
+  | 'target_slash'
+  | 'coin_catch'
+  | 'blade_clash'
+  | 'stance_mirror'
+  | 'whetstone_rhythm';
+
+export type StanceDir = 'LEFT' | 'RIGHT' | 'UP' | 'DOWN';
 
 export interface RoadHealthPack {
   id: string;
@@ -183,7 +189,7 @@ export interface RoadMinigameState {
   active: boolean;
   completed: boolean;
   succeeded: boolean;
-  /** Shared timer / cursor state for all 4 minigames */
+  /** Shared timer / cursor state for all 8 minigames */
   timer: number;
   maxTimer: number;
   score: number;
@@ -191,6 +197,7 @@ export interface RoadMinigameState {
   cursor: number;
   cursorDir: number;
   promptKey: 'K' | 'J' | 'L';
+  stanceDir: StanceDir;
   lanes: Array<{ lane: number; y: number; speed: number }>;
   playerLane: number;
   flashMsg: string;
@@ -439,106 +446,140 @@ const VARIANT_CONFIGS: Record<
   },
 };
 
-export function generateRoadMinigame(targetDistance: number): RoadMinigameState {
-  const kinds: RoadMinigameKind[] = [
-    'anvil_timing',
-    'parry_gauntlet',
-    'boulder_dodge',
-    'target_slash',
-  ];
-  const kind = kinds[Math.floor(Math.random() * kinds.length)];
-  const distance = Math.round(targetDistance * 0.5);
-
-  if (kind === 'anvil_timing') {
-    return {
-      kind,
-      title: 'Roadside Forge Anvil',
-      instructions: 'Press J (Strong Strike) when the hammer hits the GOLD zone (3 hits)!',
-      distance,
-      active: false,
-      completed: false,
-      succeeded: false,
-      timer: 0,
-      maxTimer: 9,
-      score: 0,
-      targetScore: 3,
-      cursor: 0.1,
-      cursorDir: 1,
-      promptKey: 'J',
-      lanes: [],
-      playerLane: 1,
-      flashMsg: '',
-      flashTimer: 0,
-    };
-  }
-  if (kind === 'parry_gauntlet') {
-    return {
-      kind,
-      title: 'Ambush Arrow Volley',
-      instructions: 'Press L (Parry) when the incoming arrow ring reaches the GOLD center (4 times)!',
-      distance,
-      active: false,
-      completed: false,
-      succeeded: false,
-      timer: 0,
-      maxTimer: 9.5,
-      score: 0,
-      targetScore: 4,
-      cursor: 0,
-      cursorDir: 1,
-      promptKey: 'L',
-      lanes: [],
-      playerLane: 1,
-      flashMsg: '',
-      flashTimer: 0,
-    };
-  }
-  if (kind === 'boulder_dodge') {
-    return {
-      kind,
-      title: 'Tumbling Rockslide',
-      instructions: 'Tap A / D to dodge boulders across 3 lanes for 6 seconds!',
-      distance,
-      active: false,
-      completed: false,
-      succeeded: false,
-      timer: 0,
-      maxTimer: 6.2,
-      score: 0,
-      targetScore: 6,
-      cursor: 0,
-      cursorDir: 1,
-      promptKey: 'L',
-      lanes: [
-        { lane: 0, y: -0.2, speed: 0.65 },
-        { lane: 2, y: -0.65, speed: 0.72 },
-      ],
-      playerLane: 1,
-      flashMsg: '',
-      flashTimer: 0,
-    };
-  }
-  const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
-  return {
-    kind: 'target_slash',
-    title: 'Master Dummy Drill',
-    instructions: 'Match the flashed swordplay key (K, J, or L) 5 times quickly!',
+function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMinigameState {
+  const base = {
+    kind,
     distance,
     active: false,
     completed: false,
     succeeded: false,
     timer: 0,
-    maxTimer: 8.5,
     score: 0,
-    targetScore: 5,
     cursor: 0,
     cursorDir: 1,
-    promptKey: keys[Math.floor(Math.random() * keys.length)],
-    lanes: [],
+    promptKey: 'K' as 'K' | 'J' | 'L',
+    stanceDir: 'LEFT' as StanceDir,
+    lanes: [] as Array<{ lane: number; y: number; speed: number }>,
     playerLane: 1,
     flashMsg: '',
     flashTimer: 0,
   };
+
+  if (kind === 'anvil_timing') {
+    return {
+      ...base,
+      title: 'Roadside Forge Anvil',
+      instructions: 'Tap J or K when the hammer hits the GOLD zone (3 hits)!',
+      maxTimer: 9,
+      targetScore: 3,
+      cursor: 0.1,
+      promptKey: 'J',
+    };
+  }
+  if (kind === 'parry_gauntlet') {
+    return {
+      ...base,
+      title: 'Ambush Arrow Volley',
+      instructions: 'Tap L (Parry) when the arrow ring reaches the GOLD center (4 times)!',
+      maxTimer: 9.5,
+      targetScore: 4,
+      promptKey: 'L',
+    };
+  }
+  if (kind === 'boulder_dodge') {
+    return {
+      ...base,
+      title: 'Tumbling Rockslide',
+      instructions: 'Move Left / Right (A / D or Stick) to dodge boulders for 6s!',
+      maxTimer: 6.2,
+      targetScore: 6,
+      lanes: [
+        { lane: 0, y: -0.2, speed: 0.65 },
+        { lane: 2, y: -0.65, speed: 0.72 },
+      ],
+    };
+  }
+  if (kind === 'coin_catch') {
+    return {
+      ...base,
+      title: 'Spilled Treasure Cart',
+      instructions: 'Move Left / Right (A / D or Stick) to catch 5 falling Gold Pouches!',
+      maxTimer: 8.5,
+      targetScore: 5,
+      lanes: [
+        { lane: 0, y: -0.1, speed: 0.62 },
+        { lane: 2, y: -0.55, speed: 0.68 },
+      ],
+    };
+  }
+  if (kind === 'blade_clash') {
+    return {
+      ...base,
+      title: 'Steel Lock Tug-of-War',
+      instructions: 'Mash K or J rapidly to overpower the rival blade before time runs out!',
+      maxTimer: 7.5,
+      targetScore: 100,
+      cursor: 0.38,
+    };
+  }
+  if (kind === 'stance_mirror') {
+    const dirs: StanceDir[] = ['LEFT', 'RIGHT', 'UP', 'DOWN'];
+    return {
+      ...base,
+      title: "Sensei's Stance Test",
+      instructions: 'Push the shown direction (WASD or Thumbstick) 5 times!',
+      maxTimer: 8.5,
+      targetScore: 5,
+      stanceDir: dirs[Math.floor(Math.random() * dirs.length)],
+    };
+  }
+  if (kind === 'whetstone_rhythm') {
+    return {
+      ...base,
+      title: 'Master Whetstone Drill',
+      instructions: 'Alternate K then J (6 strokes) to hone your Oathblade!',
+      maxTimer: 8.0,
+      targetScore: 6,
+      promptKey: 'K',
+    };
+  }
+  const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
+  return {
+    ...base,
+    title: 'Master Dummy Drill',
+    instructions: 'Match the flashed swordplay key (K, J, or L) 5 times quickly!',
+    maxTimer: 8.5,
+    targetScore: 5,
+    promptKey: keys[Math.floor(Math.random() * keys.length)],
+  };
+}
+
+/**
+ * Generates 2 to 3 DISTINCT randomized minigames per road level!
+ * Because they re-roll every run, dying and returning to the same road
+ * gives different minigames in those spots!
+ */
+export function generateRoadMinigames(targetDistance: number, tier = 1): RoadMinigameState[] {
+  const pool: RoadMinigameKind[] = [
+    'anvil_timing',
+    'parry_gauntlet',
+    'boulder_dodge',
+    'target_slash',
+    'coin_catch',
+    'blade_clash',
+    'stance_mirror',
+    'whetstone_rhythm',
+  ];
+  const count = tier >= 3 ? 3 : 2;
+  const fracs = count === 3 ? [0.27, 0.54, 0.8] : [0.34, 0.68];
+  const games: RoadMinigameState[] = [];
+
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    const kind = pool.splice(idx, 1)[0];
+    games.push(createMinigameOfKind(kind, Math.round(targetDistance * fracs[i])));
+  }
+  return games;
 }
 
 export function spawnRoadGuardians(

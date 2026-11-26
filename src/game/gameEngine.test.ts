@@ -25,8 +25,8 @@ describe('GameEngine end-to-end flow', () => {
     expect(engine.screen).toBe('path');
     expect(engine.currentTierIndex).toBe(0);
 
-    // Complete minigame & advance along the trail to trigger boss gate
-    engine.roadMinigame.completed = true;
+    // Complete minigames & advance along the trail to trigger boss gate
+    for (const m of engine.roadMinigames) m.completed = true;
     engine.pathState.distance = engine.pathState.targetDistance;
     engine.update(1 / 60);
     expect(engine.screen).toBe('tale_of_tape');
@@ -58,8 +58,19 @@ describe('GameEngine end-to-end flow', () => {
 
     expect(engine.pathState.targetDistance).toBeGreaterThanOrEqual(3600);
     expect(engine.roadGuardians.length).toBeGreaterThanOrEqual(10);
-    expect(engine.roadMinigame).toBeDefined();
-    expect(['anvil_timing', 'parry_gauntlet', 'boulder_dodge', 'target_slash']).toContain(engine.roadMinigame.kind);
+    expect(engine.roadMinigames.length).toBeGreaterThanOrEqual(2);
+    for (const m of engine.roadMinigames) {
+      expect([
+        'anvil_timing',
+        'parry_gauntlet',
+        'boulder_dodge',
+        'target_slash',
+        'coin_catch',
+        'blade_clash',
+        'stance_mirror',
+        'whetstone_rhythm',
+      ]).toContain(m.kind);
+    }
     const miniBosses = engine.roadGuardians.filter((g) => g.isMiniBoss);
     expect(miniBosses).toHaveLength(1);
     for (const g of engine.roadGuardians) {

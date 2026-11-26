@@ -34,7 +34,7 @@ import { PixelVfxManager } from '../render/vfxSprites';
 import type { ActiveBossAreaAttack } from '../render/bossAreaRenderer';
 import {
   generateRoadHealthPacks,
-  generateRoadMinigame,
+  generateRoadMinigames,
   generateRoadVariation,
   rollRunBuffChoices,
   spawnRoadGuardians,
@@ -43,6 +43,7 @@ import {
   type RoadMinigameState,
   type RoadVariation,
   type RunBuff,
+  type StanceDir,
 } from './runContent';
 import { getFightingStyle } from './fightingStyles';
 
@@ -183,7 +184,8 @@ export class GameEngine {
   public roadVariation!: RoadVariation;
   public roadGuardians: RoadGuardian[] = [];
   public roadHealthPacks: RoadHealthPack[] = [];
-  public roadMinigame!: RoadMinigameState;
+  public roadMinigames: RoadMinigameState[] = [];
+  public activeRoadMinigame: RoadMinigameState | null = null;
   public minigameLaneCooldown = 0;
   /** Minions dynamically summoned by bosses during combat! */
   public arenaMinions: Array<RoadGuardian & { y: number }> = [];
@@ -241,7 +243,8 @@ export class GameEngine {
     this.pathState = this.createFreshPathState();
     this.roadVariation = generateRoadVariation(bossInst.template.biome, this.pathState.targetDistance);
     this.roadHealthPacks = generateRoadHealthPacks(this.pathState.targetDistance);
-    this.roadMinigame = generateRoadMinigame(this.pathState.targetDistance);
+    this.roadMinigames = generateRoadMinigames(this.pathState.targetDistance, bossInst.template.tier);
+    this.activeRoadMinigame = null;
     this.minigameLaneCooldown = 0;
     this.roadGuardians = spawnRoadGuardians(
       bossInst.template.biome,
@@ -573,18 +576,16 @@ export class GameEngine {
 
   private updatePath(dt: number): void {
     // Handle active Roadside Minigame encounter!
-    if (this.roadMinigame && this.roadMinigame.active) {
+    if (this.activeRoadMinigame && this.activeRoadMinigame.active) {
       this.updateRoadMinigame(dt);
       return;
     }
 
-    // Trigger randomized Road Minigame when reaching its shrine distance
-    if (
-      this.roadMinigame &&
-      !this.roadMinigame.completed &&
-      this.pathState.distance >= this.roadMinigame.distance
-    ) {
-      this.roadMinigame.active = true;
+    // Trigger next uncompleted Roadside Minigame when reaching its shrine distance
+    const nextMg = this.roadMinigames.find((m) => !m.completed && this.pathState.distance >= m.distance);
+    if (nextMg) {
+      nextMg.active = true;
+      this.activeRoadMinigame = nextMg;
       this.input.clearBuffers();
       this.sound.playBossTelegraph();
       return;
@@ -848,10 +849,10 @@ export class GameEngine {
       }
     }
 
-    // Pressing Space/Enter fast-forwards ONLY once all road guardians & minigame are cleared!
+    // Pressing Space/Enter fast-forwards ONLY once all road guardians & minigames are cleared!
     const allCleared =
       this.roadGuardians.every((g) => g.state === 'dead') &&
-      (!this.roadMinigame || this.roadMinigame.completed);
+      this.roadMinigames.every((m) => m.completed);
     if (this.input.consumeAction('confirm') && allCleared) {
       this.pathState.distance = this.pathState.targetDistance;
     }
@@ -862,7 +863,8 @@ export class GameEngine {
   }
 
   private updateRoadMinigame(dt: number): void {
-    const mg = this.roadMinigame;
+    const mg = this.activeRoadMinigame;
+    if (!mg) return;
     mg.timer += dt;
     if (mg.flashTimer > 0) mg.flashTimer = Math.max(0, mg.flashTimer - dt);
     if (this.minigameLaneCooldown > 0) this.minigameLaneCooldown = Math.max(0, this.minigameLaneCooldown - dt);
@@ -871,16 +873,17 @@ export class GameEngine {
       mg.active = false;
       mg.completed = true;
       mg.succeeded = won;
+      this.activeRoadMinigame = null;
       const bossInst = this.gauntlet[this.currentTierIndex] ?? this.gauntlet[0];
       if (won) {
         const bountyMul = this.getBountyBonusMultiplier();
-        const gold = Math.round(bossInst.stats.goldReward * 0.35 * bountyMul);
-        const xp = Math.round(bossInst.stats.xpReward * 0.35 * bountyMul);
+        const gold = Math.round(bossInst.stats.goldReward * (mg.kind === 'coin_catch' ? 0.45 : 0.3) * bountyMul);
+        const xp = Math.round(bossInst.stats.xpReward * 0.3 * bountyMul);
         this.progress.gold += gold;
         this.progress.xp += xp;
         this.runSummary.goldEarnedThisRun += gold;
         this.runSummary.xpEarnedThisRun += xp;
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.22));
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.18));
         this.effects.addFlash('#69f0ae', 0.3);
         this.sound.playVictory();
         saveProgress(this.progress);
@@ -934,14 +937,14 @@ export class GameEngine {
         mg.flashTimer = 0.4;
         this.sound.playPlayerHurt();
       }
-    } else if (mg.kind === 'boulder_dodge') {
+    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch') {
       const move = this.input.getMoveVector();
       if (this.minigameLaneCooldown <= 0) {
-        if (move.x < 0 && mg.playerLane > 0) {
+        if (move.x < -0.3 && mg.playerLane > 0) {
           mg.playerLane -= 1;
           this.minigameLaneCooldown = 0.18;
           this.sound.playDodge();
-        } else if (move.x > 0 && mg.playerLane < 2) {
+        } else if (move.x > 0.3 && mg.playerLane < 2) {
           mg.playerLane += 1;
           this.minigameLaneCooldown = 0.18;
           this.sound.playDodge();
@@ -949,21 +952,64 @@ export class GameEngine {
       }
       for (const b of mg.lanes) {
         b.y += b.speed * dt;
-        if (b.y > 0.82 && b.y < 0.98 && b.lane === mg.playerLane) {
-          this.applyPlayerIncomingDamage(12);
+        if (b.y > 0.8 && b.y < 0.98 && b.lane === mg.playerLane) {
           b.y = -0.2;
           b.lane = Math.floor(Math.random() * 3);
-          mg.flashMsg = 'HIT BY BOULDER!';
-          mg.flashTimer = 0.45;
-          this.sound.playPlayerHurt();
+          if (mg.kind === 'coin_catch') {
+            mg.score += 1;
+            mg.flashMsg = '+GOLD POUCH!';
+            mg.flashTimer = 0.4;
+            this.sound.playParry();
+            if (mg.score >= mg.targetScore) return finish(true);
+          } else {
+            this.applyPlayerIncomingDamage(12);
+            mg.flashMsg = 'HIT BY BOULDER!';
+            mg.flashTimer = 0.45;
+            this.sound.playPlayerHurt();
+          }
         } else if (b.y >= 1.1) {
           b.y = -0.15;
           b.lane = Math.floor(Math.random() * 3);
-          mg.score += 1;
+          if (mg.kind === 'boulder_dodge') mg.score += 1;
         }
       }
-      if (mg.timer >= mg.maxTimer) return finish(true);
-    } else if (mg.kind === 'target_slash') {
+      if (mg.kind === 'boulder_dodge' && mg.timer >= mg.maxTimer) return finish(true);
+    } else if (mg.kind === 'blade_clash') {
+      // Drains steadily; mashing K or J pushes it to 100%!
+      mg.cursor = Math.max(0.05, mg.cursor - dt * 0.24);
+      if (this.input.consumeAction('quick') || this.input.consumeAction('strong')) {
+        mg.cursor = Math.min(1, mg.cursor + 0.11);
+        mg.flashMsg = 'PUSH!';
+        mg.flashTimer = 0.2;
+        this.sound.playGuardClang();
+        if (mg.cursor >= 0.99) return finish(true);
+      }
+    } else if (mg.kind === 'stance_mirror') {
+      const move = this.input.getMoveVector();
+      if (this.minigameLaneCooldown <= 0) {
+        let dir: StanceDir | null = null;
+        if (move.x < -0.45) dir = 'LEFT';
+        else if (move.x > 0.45) dir = 'RIGHT';
+        else if (move.y < -0.45) dir = 'UP';
+        else if (move.y > 0.45) dir = 'DOWN';
+        if (dir) {
+          this.minigameLaneCooldown = 0.26;
+          if (dir === mg.stanceDir) {
+            mg.score += 1;
+            mg.flashMsg = 'STANCE MATCHED!';
+            mg.flashTimer = 0.35;
+            this.sound.playParry();
+            const dirs: StanceDir[] = ['LEFT', 'RIGHT', 'UP', 'DOWN'];
+            mg.stanceDir = dirs[Math.floor(Math.random() * dirs.length)];
+            if (mg.score >= mg.targetScore) return finish(true);
+          } else {
+            mg.flashMsg = 'WRONG DIRECTION!';
+            mg.flashTimer = 0.35;
+            this.sound.playGuardClang();
+          }
+        }
+      }
+    } else if (mg.kind === 'whetstone_rhythm' || mg.kind === 'target_slash') {
       const pressed: 'K' | 'J' | 'L' | null = this.input.consumeAction('quick')
         ? 'K'
         : this.input.consumeAction('strong')
@@ -974,11 +1020,15 @@ export class GameEngine {
       if (pressed) {
         if (pressed === mg.promptKey) {
           mg.score += 1;
-          mg.flashMsg = 'CRISP!';
+          mg.flashMsg = mg.kind === 'whetstone_rhythm' ? 'SHARP!' : 'CRISP!';
           mg.flashTimer = 0.35;
           this.sound.playHit(true, false);
-          const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
-          mg.promptKey = keys[Math.floor(Math.random() * keys.length)];
+          if (mg.kind === 'whetstone_rhythm') {
+            mg.promptKey = mg.promptKey === 'K' ? 'J' : 'K';
+          } else {
+            const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
+            mg.promptKey = keys[Math.floor(Math.random() * keys.length)];
+          }
           if (mg.score >= mg.targetScore) return finish(true);
         } else {
           mg.flashMsg = 'WRONG KEY!';
