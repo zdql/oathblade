@@ -1549,7 +1549,7 @@ export class GameEngine {
           b.stateTimer = 0;
           b.currentMove = null;
           b.tellLabel = '';
-          b.decisionCooldown = (0.48 + Math.random() * 0.34) / stats.aggression;
+          b.decisionCooldown = (0.4 + Math.random() * 0.28) / stats.aggression;
           b.spamHitsTaken = 0;
           this.bossAnim.play('idle');
         }
