@@ -152,6 +152,47 @@ export interface RoadHealthPack {
   collected: boolean;
 }
 
+export interface RoadTreasureChest {
+  id: string;
+  guardianId: string;
+  distance: number;
+  x: number;
+  unlocked: boolean;
+  opened: boolean;
+  openAnimTimer: number;
+  goldReward: number;
+  xpReward: number;
+}
+
+/**
+ * Each Road Mini-Boss has a 55% chance to guard an ornate Treasure Chest
+ * containing Gold, XP, and a random Pet / Armor / Gear upgrade!
+ */
+export function generateRoadTreasureChests(
+  guardians: RoadGuardian[],
+  bossGold: number,
+  bossXp: number
+): RoadTreasureChest[] {
+  const chests: RoadTreasureChest[] = [];
+  for (const g of guardians) {
+    if (!g.isMiniBoss) continue;
+    if (Math.random() < 0.55) {
+      chests.push({
+        id: `chest_${g.id}`,
+        guardianId: g.id,
+        distance: g.distance + 28,
+        x: Math.max(-165, Math.min(165, g.x)),
+        unlocked: false,
+        opened: false,
+        openAnimTimer: 0,
+        goldReward: Math.max(8, Math.round(bossGold * 0.35)),
+        xpReward: Math.max(35, Math.round(bossXp * 0.38)),
+      });
+    }
+  }
+  return chests;
+}
+
 export function generateRoadHealthPacks(targetDistance: number): RoadHealthPack[] {
   const packs: RoadHealthPack[] = [];
   // Sporadic placement across 4 road segments (45% chance per segment -> 1-3 packs, never too easy!)

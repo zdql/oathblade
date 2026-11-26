@@ -87,6 +87,7 @@ export class EffectsManager {
   public recentXpDelta = 0;
   public recentXpTimer = 0;
   public levelUpBanner: { level: number; timer: number; maxTimer: number } | null = null;
+  public lootBanner: { title: string; subtitle: string; color: string; timer: number; maxTimer: number } | null = null;
 
   public reset(): void {
     this.particles = [];
@@ -108,6 +109,12 @@ export class EffectsManager {
     this.recentXpDelta = 0;
     this.recentXpTimer = 0;
     this.levelUpBanner = null;
+    this.lootBanner = null;
+  }
+
+  public spawnLootBanner(title: string, subtitle: string, color = '#ffd740'): void {
+    this.lootBanner = { title, subtitle, color, timer: 2.8, maxTimer: 2.8 };
+    this.addFlash(color, 0.24);
   }
 
   public spawnLevelUp(newLevel: number): void {
@@ -371,6 +378,10 @@ export class EffectsManager {
     if (this.levelUpBanner) {
       this.levelUpBanner.timer -= dt;
       if (this.levelUpBanner.timer <= 0) this.levelUpBanner = null;
+    }
+    if (this.lootBanner) {
+      this.lootBanner.timer -= dt;
+      if (this.lootBanner.timer <= 0) this.lootBanner = null;
     }
 
     for (let i = this.hudPopups.length - 1; i >= 0; i--) {

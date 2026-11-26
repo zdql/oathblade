@@ -14,6 +14,7 @@ import {
 import { ComboEngine, type ComboDefinition, type ComboInput } from '../combos';
 import { generateGauntletRun, type BossInstance, type BossMove, type BossMoveStep } from '../bosses';
 import {
+  UPGRADE_SPECS,
   applyXpGain,
   computePlayerStats,
   getComboLevelMultiplier,
@@ -36,12 +37,14 @@ import type { ActiveBossAreaAttack } from '../render/bossAreaRenderer';
 import {
   generateRoadHealthPacks,
   generateRoadMinigames,
+  generateRoadTreasureChests,
   generateRoadVariation,
   rollRunBuffChoices,
   spawnRoadGuardians,
   type RoadGuardian,
   type RoadHealthPack,
   type RoadMinigameState,
+  type RoadTreasureChest,
   type RoadVariation,
   type RunBuff,
   type StanceDir,
@@ -194,6 +197,7 @@ export class GameEngine {
   public roadVariation!: RoadVariation;
   public roadGuardians: RoadGuardian[] = [];
   public roadHealthPacks: RoadHealthPack[] = [];
+  public roadChests: RoadTreasureChest[] = [];
   public roadMinigames: RoadMinigameState[] = [];
   public activeRoadMinigame: RoadMinigameState | null = null;
   public minigameLaneCooldown = 0;
@@ -272,6 +276,11 @@ export class GameEngine {
       this.pathState.targetDistance,
       bossInst.template.tier,
       this.stats.baseAttack
+    );
+    this.roadChests = generateRoadTreasureChests(
+      this.roadGuardians,
+      bossInst.stats.goldReward,
+      bossInst.stats.xpReward
     );
     this.pathAttackCooldown = 0;
     this.pathDashTimer = 0;
@@ -980,6 +989,62 @@ export class GameEngine {
         this.healPlayer(healAmt);
         this.effects.addFlash('#69f0ae', 0.24);
         this.sound.playVictory();
+      }
+    }
+
+    // Unlock & Open Mini-Boss Guarded Treasure Chests (Gold + XP + Random Pet / Armor / Gear!)
+    for (const chest of this.roadChests) {
+      if (chest.openAnimTimer > 0) {
+        chest.openAnimTimer = Math.max(0, chest.openAnimTimer - dt);
+      }
+      if (!chest.unlocked) {
+        const guard = this.roadGuardians.find((g) => g.id === chest.guardianId);
+        if (!guard || guard.state === 'dead') {
+          chest.unlocked = true;
+        }
+      }
+      if (
+        chest.unlocked &&
+        !chest.opened &&
+        Math.abs(chest.distance - this.pathState.distance) < 78 &&
+        Math.abs(chest.x - this.pathState.playerX) < 96
+      ) {
+        chest.opened = true;
+        chest.openAnimTimer = 1.6;
+        const bountyMul = this.getBountyBonusMultiplier();
+        const gold = Math.max(6, Math.round(chest.goldReward * bountyMul));
+        const xp = Math.round(chest.xpReward * bountyMul);
+        const popX = 640 + chest.x * 0.8;
+        this.awardGold(gold, popX, 340);
+        this.awardXp(xp, popX, 375);
+
+        // Roll a random non-maxed Pet, Armor, or Gear upgrade!
+        const lootPool = UPGRADE_SPECS.filter(
+          (u) => (u.category === 'pet' || u.category === 'gear') && (this.progress.upgrades[u.id] ?? 0) < u.maxLevel
+        );
+        if (lootPool.length > 0) {
+          const picked = lootPool[Math.floor(Math.random() * lootPool.length)];
+          const nextLv = (this.progress.upgrades[picked.id] ?? 0) + 1;
+          this.progress.upgrades[picked.id] = nextLv;
+          this.syncStatsFromProgress();
+          const tag = picked.category === 'pet' ? 'PET LOOT' : 'ARMOR & GEAR';
+          this.effects.spawnLootBanner(
+            `✦ ${tag}: ${picked.name.toUpperCase()} (Lv.${nextLv}) ✦`,
+            `+${gold} Gold  •  +${Math.round(xp * 1.5)} XP  •  ${picked.effectPerLevel}`,
+            picked.category === 'pet' ? '#69f0ae' : '#ffd740'
+          );
+        } else {
+          // All gear & pets already maxed -> grant bonus gold & XP!
+          const bonusGold = Math.round(gold * 0.8);
+          this.awardGold(bonusGold, popX, 315);
+          this.effects.spawnLootBanner(
+            `✦ ROYAL TREASURE HOARD! ✦`,
+            `+${gold + bonusGold} Gold  •  +${Math.round(xp * 1.5)} XP`,
+            '#ffd740'
+          );
+        }
+        this.sound.playVictory();
+        saveProgress(this.progress);
       }
     }
 

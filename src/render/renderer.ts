@@ -274,6 +274,19 @@ export class GameRenderer {
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    // Render Mini-Boss Guarded Treasure Chests!
+    const visibleChests = engine.roadChests.filter(
+      (c) => c.distance > ps.distance - 30 && c.distance < ps.distance + 460
+    );
+    for (const c of visibleChests) {
+      const rel = Math.max(0, Math.min(1, (c.distance - ps.distance) / 460));
+      const depth = 1 - rel;
+      const cy = 310 + Math.pow(depth, 1.35) * 235;
+      const cxChest = roadCenterAt(depth) + c.x * (0.55 + depth * 0.55);
+      const cScale = 0.58 + depth * 0.72;
+      drawTreasureChestSprite(ctx, cxChest, cy, cScale, c.unlocked, c.opened, this.clock);
+    }
+
     // Render Sporadic Road Health Packs (bobbing Zelda/Pokémon Heart Vials!)
     const visiblePacks = engine.roadHealthPacks.filter(
       (pk) => !pk.collected && pk.distance > ps.distance - 25 && pk.distance < ps.distance + 450
@@ -1197,6 +1210,40 @@ export class GameRenderer {
       ctx.restore();
     }
 
+    // Celebratory TREASURE CHEST LOOT Banner Animation
+    if (fx.lootBanner) {
+      const b = fx.lootBanner;
+      const elapsed = b.maxTimer - b.timer;
+      const enterT = Math.min(1, elapsed / 0.25);
+      const exitT = Math.min(1, b.timer / 0.45);
+      const alpha = Math.min(enterT, exitT);
+      const scale = 0.88 + Math.sin(enterT * Math.PI * 0.5) * 0.12;
+      const yPos = fx.levelUpBanner ? 275 : 205;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(this.width * 0.5, yPos);
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = 'rgba(12, 16, 26, 0.94)';
+      ctx.beginPath();
+      ctx.roundRect(-270, -34, 540, 68, 14);
+      ctx.fill();
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = b.color;
+      ctx.font = '900 18px Georgia, serif';
+      ctx.fillText(b.title, 0, -4);
+
+      ctx.fillStyle = '#f1f5f9';
+      ctx.font = '700 12px system-ui, sans-serif';
+      ctx.fillText(b.subtitle, 0, 19);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 }
@@ -1353,6 +1400,81 @@ function drawDashStreaks(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
     ctx.moveTo(cx + ox, cy - 18 * scale);
     ctx.lineTo(cx + ox * 1.15, cy + 38 * scale);
     ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTreasureChestSprite(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  unlocked: boolean,
+  opened: boolean,
+  time: number
+): void {
+  ctx.save();
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 6 * scale, 26 * scale, 9 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Golden beacon halo when unlocked & ready to open
+  if (unlocked && !opened) {
+    const pulse = 0.55 + Math.sin(time * 7) * 0.25;
+    ctx.strokeStyle = `rgba(255, 215, 64, ${pulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y - 16 * scale, (26 + Math.sin(time * 6) * 3) * scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.translate(Math.round(x), Math.round(y - 12 * scale));
+  ctx.scale(scale, scale);
+
+  // Chest body (heavy oak & gold bands)
+  ctx.fillStyle = '#1b120c';
+  ctx.fillRect(-20, -16, 40, 28);
+  ctx.fillStyle = '#6d4323';
+  ctx.fillRect(-18, -14, 36, 24);
+  ctx.fillStyle = '#8d572e';
+  ctx.fillRect(-16, -6, 32, 14);
+
+  // Gold ironwork straps
+  ctx.fillStyle = '#ffd54f';
+  ctx.fillRect(-18, -14, 5, 24);
+  ctx.fillRect(13, -14, 5, 24);
+  ctx.fillRect(-18, -3, 36, 4);
+
+  if (opened) {
+    // Lid swung open + glowing treasure pile inside!
+    ctx.fillStyle = '#4e2f18';
+    ctx.fillRect(-18, -26, 36, 12);
+    ctx.fillStyle = '#ffd740';
+    ctx.fillRect(-14, -12, 28, 8);
+    ctx.fillStyle = '#fff59d';
+    ctx.fillRect(-8, -16, 16, 6);
+  } else {
+    // Closed lid + center clasp (red seal if guarded, glowing gold if unlocked)
+    ctx.fillStyle = unlocked ? '#ffea00' : '#ff5252';
+    ctx.fillRect(-4, -5, 8, 9);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-2, -3, 4, 3);
+  }
+
+  ctx.restore();
+
+  // Floating status label above chest
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = `800 ${Math.max(10, Math.round(11 * scale))}px system-ui, sans-serif`;
+  if (!unlocked) {
+    ctx.fillStyle = '#ff8a80';
+    ctx.fillText('🔒 WARDEN CHEST', x, y - 38 * scale);
+  } else if (!opened) {
+    ctx.fillStyle = '#ffea00';
+    ctx.fillText('★ OPEN CHEST! ★', x, y - 40 * scale + Math.sin(time * 8) * 3);
   }
   ctx.restore();
 }
