@@ -342,17 +342,25 @@ export interface PlayerProgress {
   gold: number;
   xp: number;
   level: number;
-  levelCap: number;
   skillPoints: number;
   runCount: number;
   highestTierCleared: number;
   totalBossesDefeated: number;
   upgrades: Record<UpgradeId, number>;
+  /** Permanent per-skill max-level cap bonuses earned from rare 5% Raid Boss drops */
+  upgradeCapBonuses: Partial<Record<UpgradeId, number>>;
   activeStyleId: FightingStyleId;
   styleLevels: Record<FightingStyleId, number>;
   unlockedComboIds: string[];
   comboLevels: Record<string, number>;
   customCombos: ComboDefinition[];
+}
+
+/** Returns the effective max level for a skill, including any Raid Skill Cap bonuses. */
+export function getUpgradeMaxLevel(id: UpgradeId, progress: PlayerProgress): number {
+  const spec = UPGRADE_SPECS.find((u) => u.id === id);
+  if (!spec) return 0;
+  return spec.maxLevel + (progress.upgradeCapBonuses?.[id] ?? 0);
 }
 
 /** Escalating XP required to advance from `level` to `level + 1`. */
@@ -361,30 +369,23 @@ export function getXpForNextLevel(level: number): number {
   return Math.round(120 * Math.pow(1.26, lv - 1) + (lv - 1) * 35);
 }
 
-/** Applies XP to PlayerProgress, advancing levels up to `levelCap` and granting 1 Upgrade Point per level earned. */
+/** Applies XP to PlayerProgress with NO overall player level cap, granting 1 Upgrade Point per level earned. */
 export function applyXpGain(
   progress: PlayerProgress,
   amount: number
 ): { leveledUp: boolean; levelsGained: number; newLevel: number } {
-  const cap = Math.max(1, progress.levelCap ?? 25);
-  if (amount <= 0 || progress.level >= cap) {
-    if (progress.level >= cap) {
-      progress.xp = Math.min(progress.xp, getXpForNextLevel(progress.level) - 1);
-    }
+  if (amount <= 0) {
     return { leveledUp: false, levelsGained: 0, newLevel: progress.level };
   }
   progress.xp += amount;
   let levelsGained = 0;
   let needed = getXpForNextLevel(progress.level);
-  while (progress.xp >= needed && progress.level < cap) {
+  while (progress.xp >= needed) {
     progress.xp -= needed;
     progress.level += 1;
     progress.skillPoints += 1;
     levelsGained += 1;
     needed = getXpForNextLevel(progress.level);
-  }
-  if (progress.level >= cap) {
-    progress.xp = Math.min(progress.xp, getXpForNextLevel(progress.level) - 1);
   }
   return {
     leveledUp: levelsGained > 0,
@@ -423,7 +424,6 @@ export function createDefaultProgress(): PlayerProgress {
     gold: 0,
     xp: 0,
     level: 1,
-    levelCap: 25,
     skillPoints: 0,
     runCount: 1,
     highestTierCleared: 0,
@@ -454,6 +454,7 @@ export function createDefaultProgress(): PlayerProgress {
       pet_fangs: 0,
       gear: 0,
     },
+    upgradeCapBonuses: {},
     activeStyleId: 'balanced',
     styleLevels: {
       balanced: 1,
@@ -600,11 +601,13 @@ export function loadProgress(): PlayerProgress {
       ...def,
       ...parsed,
       level: typeof parsed.level === 'number' && parsed.level >= 1 ? Math.floor(parsed.level) : 1,
-      levelCap: typeof parsed.levelCap === 'number' && parsed.levelCap >= 25 ? Math.floor(parsed.levelCap) : 25,
       skillPoints: typeof parsed.skillPoints === 'number' && parsed.skillPoints >= 0 ? Math.floor(parsed.skillPoints) : 0,
       upgrades: {
         ...def.upgrades,
         ...(parsed.upgrades ?? {}),
+      },
+      upgradeCapBonuses: {
+        ...(parsed.upgradeCapBonuses ?? {}),
       },
       activeStyleId: parsed.activeStyleId ?? def.activeStyleId,
       styleLevels: {

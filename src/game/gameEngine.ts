@@ -174,8 +174,10 @@ export interface RunSummary {
     gold: number;
     xp: number;
     skillPoints: number;
-    levelCapUpgraded: boolean;
-    newLevelCap: number;
+    skillCapUpgradeAvailable: boolean;
+    skillCapUpgradeClaimed: boolean;
+    upgradedSkillName?: string;
+    upgradedSkillNewMax?: number;
   };
 }
 
@@ -543,6 +545,21 @@ export class GameEngine {
     this.player.stamina = this.player.maxStamina;
     this.screen = 'path';
     this.input.clearBuffers();
+    this.notifyUI();
+  }
+
+  public applyRaidSkillCapUpgrade(id: keyof PlayerProgress['upgrades']): void {
+    const r = this.runSummary.lastRaidReward;
+    if (!r || !r.skillCapUpgradeAvailable || r.skillCapUpgradeClaimed) return;
+    const spec = UPGRADE_SPECS.find((u) => u.id === id);
+    if (!spec) return;
+    const currentBonus = this.progress.upgradeCapBonuses[id] ?? 0;
+    this.progress.upgradeCapBonuses[id] = currentBonus + 3;
+    r.skillCapUpgradeClaimed = true;
+    r.upgradedSkillName = spec.name;
+    r.upgradedSkillNewMax = spec.maxLevel + this.progress.upgradeCapBonuses[id]!;
+    this.sound.playVictory();
+    saveProgress(this.progress);
     this.notifyUI();
   }
 
@@ -2566,12 +2583,9 @@ export class GameEngine {
     this.progress.totalBossesDefeated += 1;
 
     if (this.isRaidFight) {
-      // Area Raid Victory: Guaranteed +2 Level Points & 5% chance for permanent +5 Level Cap Upgrade!
+      // Area Raid Victory: Guaranteed +2 Level Points & 5% chance to choose ANY skill to boost its max level cap (+3)!
       this.progress.skillPoints += 2;
-      const levelCapUpgraded = Math.random() < 0.05;
-      if (levelCapUpgraded) {
-        this.progress.levelCap = (this.progress.levelCap ?? 25) + 5;
-      }
+      const skillCapUpgradeAvailable = Math.random() < 0.05;
       if (this.roadRaidPortal) {
         this.roadRaidPortal.cleared = true;
       }
@@ -2580,8 +2594,8 @@ export class GameEngine {
         gold: awardedGold,
         xp: awardedXp,
         skillPoints: 2,
-        levelCapUpgraded,
-        newLevelCap: this.progress.levelCap,
+        skillCapUpgradeAvailable,
+        skillCapUpgradeClaimed: false,
       };
     } else {
       this.progress.highestTierCleared = Math.max(this.progress.highestTierCleared, inst.template.tier);

@@ -6,6 +6,7 @@ import {
   getComboUpgradeCosts,
   getMaxedUpgradeSummary,
   getUpgradeCost,
+  getUpgradeMaxLevel,
   getXpForNextLevel,
   isEverythingMaxed,
   resetProgress,
@@ -221,7 +222,7 @@ export class UIOverlay {
             </div>
             <div class="stat-box">
               <div class="stat-label">Rare 5% Drop</div>
-              <div class="stat-val" style="color:#ffd740;">+5 Lvl Cap</div>
+              <div class="stat-val" style="color:#ffd740;">+3 Skill Cap</div>
             </div>
           </div>
 
@@ -236,17 +237,19 @@ export class UIOverlay {
 
   private renderRaidVictory(): string {
     const r = this.engine.runSummary.lastRaidReward;
+    const p = this.engine.progress;
+    const showPicker = Boolean(r?.skillCapUpgradeAvailable && !r?.skillCapUpgradeClaimed);
     return `
       <div class="overlay-screen">
-        <div class="card run-summary-card" style="text-align:center;max-width:680px;border-color:#e040fb;">
+        <div class="card run-summary-card ${showPicker ? 'sanctuary-card' : ''}" style="text-align:center;max-width:${showPicker ? '860px' : '680px'};border-color:#e040fb;">
           <div class="tape-tier" style="color:#ea80fc;">⚡ Area Raid Conquered! ⚡</div>
-          <div class="title-logo" style="font-size:34px;margin:6px 0;">${r?.bossName ?? 'Raid Sovereign'} Vanquished</div>
+          <div class="title-logo" style="font-size:32px;margin:6px 0;">${r?.bossName ?? 'Raid Sovereign'} Vanquished</div>
 
-          <div class="reward-showcase" style="margin:14px 0;">
+          <div class="reward-showcase" style="margin:12px 0;">
             <div class="reward-pill" style="border-color:#69f0ae;background:rgba(105,240,174,0.12);">
               <div class="reward-label">Guaranteed Raid Reward</div>
               <div class="reward-value" style="color:#69f0ae;">+${r?.skillPoints ?? 2} LVL Pts</div>
-              <div class="reward-total">Available: ${this.engine.progress.skillPoints} LVL Pts</div>
+              <div class="reward-total">Available: ${p.skillPoints} LVL Pts</div>
             </div>
             <div class="reward-pill reward-gold">
               <div class="reward-label">Raid Bounty</div>
@@ -256,21 +259,45 @@ export class UIOverlay {
           </div>
 
           ${
-            r?.levelCapUpgraded
+            showPicker
+              ? `
+                <div style="margin:10px 0 8px;padding:10px 14px;border-radius:10px;border:2px solid #ffd740;background:rgba(255,215,64,0.16);color:#ffd740;font-weight:900;font-size:14px;">
+                  ★ RARE 5% DROP! CHOOSE ANY SKILL TO RAISE ITS LEVEL CAP (+3 MAX LVL) ★
+                </div>
+                <div class="shop-scroll" style="max-height:240px;text-align:left;margin-bottom:10px;">
+                  <div class="shop-grid">
+                    ${UPGRADE_SPECS.map((u) => {
+                      const curMax = getUpgradeMaxLevel(u.id, p);
+                      return `
+                        <div class="shop-item" style="border-color:rgba(255,215,64,0.35);">
+                          <div>
+                            <h4><span>${u.name}</span><span style="color:#ffd740;font-size:11px;">Max ${curMax} → ${curMax + 3}</span></h4>
+                            <p style="margin-top:2px;">${u.effectPerLevel}</p>
+                          </div>
+                          <button class="btn btn-primary btn-sm" data-boost-skill-cap="${u.id}">Raise Cap (+3)</button>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              `
+              : r?.skillCapUpgradeClaimed
               ? `<div style="margin:12px 0;padding:12px 16px;border-radius:10px;border:2px solid #ffd740;background:rgba(255,215,64,0.16);color:#ffd740;font-weight:900;font-size:15px;">
-                  ★ RARE 5% DROP! LEVEL CAP UPGRADED (+5) — NEW MAX LEVEL: Lv.${r.newLevelCap} ★
+                  ★ ${r.upgradedSkillName} LEVEL CAP RAISED TO Lv.${r.upgradedSkillNewMax}! ★
                 </div>`
               : `<div style="margin:8px 0;font-size:12px;color:#94a3b8;">
-                  Current Level Cap: Lv.${this.engine.progress.levelCap} (5% chance per Raid to raise by +5)
+                  No Skill Cap Drop this Raid (5% chance per Raid to raise any skill's max level by +3)
                 </div>`
           }
 
-          <p style="color:#cbd5e1;font-size:13px;margin:10px 0;">
+          <p style="color:#cbd5e1;font-size:13px;margin:8px 0;">
             The Rift collapses behind you, restoring 35% Vitality before returning to the trail.
           </p>
 
           <div class="btn-row">
-            <button class="btn btn-primary" data-action="return-from-raid">Return to Trail</button>
+            <button class="btn btn-primary" data-action="return-from-raid" ${showPicker ? 'disabled' : ''}>
+              ${showPicker ? 'Choose a Skill Cap Upgrade Above First' : 'Return to Trail'}
+            </button>
           </div>
         </div>
       </div>
@@ -566,13 +593,15 @@ export class UIOverlay {
           ${filtered
             .map((u) => {
               const lvl = p.upgrades[u.id] ?? 0;
-              const maxed = lvl >= u.maxLevel;
+              const effectiveMax = getUpgradeMaxLevel(u.id, p);
+              const bonusCap = p.upgradeCapBonuses?.[u.id] ?? 0;
+              const maxed = lvl >= effectiveMax;
               const goldCost = getUpgradeCost(u.id, lvl);
               const canAfford = p.gold >= goldCost && p.skillPoints >= 1 && !maxed;
               return `
                 <div class="shop-item">
                   <div>
-                    <h4><span>${u.name}</span><span style="color:var(--gold);font-size:12px;">Lv ${lvl}/${u.maxLevel}</span></h4>
+                    <h4><span>${u.name}</span><span style="color:var(--gold);font-size:12px;">Lv ${lvl}/${effectiveMax}${bonusCap > 0 ? ` (+${bonusCap})` : ''}</span></h4>
                     <p>${u.description}</p>
                     <p style="color:var(--emerald);margin-top:4px;font-weight:600;">${u.effectPerLevel}</p>
                   </div>
@@ -744,7 +773,7 @@ export class UIOverlay {
             </div>
             <div class="currency-bar" style="align-items:center;flex-wrap:wrap;justify-content:flex-end;">
               <span class="currency-gold">Gold: ${p.gold}g</span>
-              <span class="currency-xp">Lv.${p.level}/${p.levelCap} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span>
+              <span class="currency-xp">Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span>
               <span style="background:${p.skillPoints > 0 ? 'rgba(105,240,174,0.18)' : 'rgba(255,255,255,0.08)'};border:1px solid ${p.skillPoints > 0 ? '#69f0ae' : 'rgba(255,255,255,0.16)'};color:${p.skillPoints > 0 ? '#69f0ae' : '#94a3b8'};padding:4px 10px;border-radius:999px;font-size:13px;">
                 LVL Pts: ${p.skillPoints}
               </span>
@@ -839,6 +868,12 @@ export class UIOverlay {
     this.container.querySelectorAll<HTMLElement>('[data-play-arcade]').forEach((el) => {
       el.addEventListener('click', () => {
         this.engine.startPracticeMinigame(el.dataset.playArcade as RoadMinigameKind);
+      });
+    });
+
+    this.container.querySelectorAll<HTMLElement>('[data-boost-skill-cap]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.engine.applyRaidSkillCapUpgrade(el.dataset.boostSkillCap as UpgradeId);
       });
     });
 
