@@ -362,16 +362,18 @@ export class GameEngine {
     );
   }
 
-  private awardGold(amount: number, fromX = 640, fromY = 340): void {
-    if (amount <= 0) return;
-    this.progress.gold += amount;
-    this.runSummary.goldEarnedThisRun += amount;
-    this.effects.spawnGoldGain(amount, fromX, fromY);
+  private awardGold(amount: number, fromX = 640, fromY = 340): number {
+    if (amount <= 0) return 0;
+    const scaled = Math.max(1, Math.round(amount * 0.75));
+    this.progress.gold += scaled;
+    this.runSummary.goldEarnedThisRun += scaled;
+    this.effects.spawnGoldGain(scaled, fromX, fromY);
+    return scaled;
   }
 
-  private awardXp(amount: number, fromX = 640, fromY = 374): void {
-    if (amount <= 0) return;
-    const scaled = Math.max(1, Math.round(amount * 1.5));
+  private awardXp(amount: number, fromX = 640, fromY = 374): number {
+    if (amount <= 0) return 0;
+    const scaled = Math.max(1, Math.round(amount * 1.5 * 1.5));
     this.runSummary.xpEarnedThisRun += scaled;
     const res = applyXpGain(this.progress, scaled);
     this.effects.spawnXpGain(scaled, fromX, fromY);
@@ -380,6 +382,7 @@ export class GameEngine {
       this.effects.spawnLevelUp(res.newLevel);
       this.sound.playVictory();
     }
+    return scaled;
   }
 
   private healPlayer(amount: number, label?: string): number {
@@ -1015,8 +1018,8 @@ export class GameEngine {
         const gold = Math.max(6, Math.round(chest.goldReward * bountyMul));
         const xp = Math.round(chest.xpReward * bountyMul);
         const popX = 640 + chest.x * 0.8;
-        this.awardGold(gold, popX, 340);
-        this.awardXp(xp, popX, 375);
+        const awardedGold = this.awardGold(gold, popX, 340);
+        const awardedXp = this.awardXp(xp, popX, 375);
 
         // Roll a random non-maxed Pet, Armor, or Gear upgrade!
         const lootPool = UPGRADE_SPECS.filter(
@@ -1030,16 +1033,15 @@ export class GameEngine {
           const tag = picked.category === 'pet' ? 'PET LOOT' : 'ARMOR & GEAR';
           this.effects.spawnLootBanner(
             `✦ ${tag}: ${picked.name.toUpperCase()} (Lv.${nextLv}) ✦`,
-            `+${gold} Gold  •  +${Math.round(xp * 1.5)} XP  •  ${picked.effectPerLevel}`,
+            `+${awardedGold} Gold  •  +${awardedXp} XP  •  ${picked.effectPerLevel}`,
             picked.category === 'pet' ? '#69f0ae' : '#ffd740'
           );
         } else {
           // All gear & pets already maxed -> grant bonus gold & XP!
-          const bonusGold = Math.round(gold * 0.8);
-          this.awardGold(bonusGold, popX, 315);
+          const bonusGold = this.awardGold(Math.round(gold * 0.8), popX, 315);
           this.effects.spawnLootBanner(
             `✦ ROYAL TREASURE HOARD! ✦`,
-            `+${gold + bonusGold} Gold  •  +${Math.round(xp * 1.5)} XP`,
+            `+${awardedGold + bonusGold} Gold  •  +${awardedXp} XP`,
             '#ffd740'
           );
         }
@@ -2339,14 +2341,14 @@ export class GameEngine {
     const gold = Math.max(3, Math.round(inst.stats.goldReward * bountyMul));
     const xp = Math.round(inst.stats.xpReward * bountyMul);
 
-    this.awardGold(gold, 640, 290);
-    this.awardXp(xp, 640, 326);
+    const awardedGold = this.awardGold(gold, 640, 290);
+    const awardedXp = this.awardXp(xp, 640, 326);
     this.progress.totalBossesDefeated += 1;
     this.progress.highestTierCleared = Math.max(this.progress.highestTierCleared, inst.template.tier);
     saveProgress(this.progress);
 
     this.runSummary.bossesDefeatedThisRun += 1;
-    this.runSummary.lastBossReward = { gold, xp, bossName: inst.template.name };
+    this.runSummary.lastBossReward = { gold: awardedGold, xp: awardedXp, bossName: inst.template.name };
 
     this.sound.playHit(true, true);
     this.bossAnim.play('defeated', true, 2.25);
