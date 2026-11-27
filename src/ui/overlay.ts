@@ -34,6 +34,7 @@ export class UIOverlay {
   private sound: SoundEngine;
   private touchControls: TouchControls;
   private activeTab: SanctuaryTab = 'upgrades';
+  private confirmingResetSave = false;
 
   // Custom Combo Forge draft state
   private draftName = 'Steel Tempest';
@@ -826,11 +827,30 @@ export class UIOverlay {
 
           <div class="shop-scroll">${bodyHtml}</div>
 
-          <div class="btn-row" style="justify-content:space-between;margin-top:14px;">
-            <button class="btn btn-danger btn-sm" data-action="reset-save">Reset Save</button>
+          <div class="btn-row" style="justify-content:space-between;align-items:center;margin-top:14px;">
+            <button class="btn btn-secondary btn-sm" style="opacity:0.55;font-size:11px;padding:4px 10px;" data-action="ask-reset-save">Reset Save…</button>
             <button class="btn btn-primary" data-action="start-run">Head Back onto the Trail</button>
           </div>
         </div>
+        ${
+          this.confirmingResetSave
+            ? `
+              <div class="overlay-screen" style="background:rgba(4,6,12,0.82);z-index:40;">
+                <div class="card" style="max-width:440px;text-align:center;border-color:#ff5252;">
+                  <div class="tape-tier" style="color:#ff8a80;">⚠ Warning: Permanent Action</div>
+                  <div style="font-family:Georgia,serif;font-size:24px;color:#fff;margin:6px 0;">Are you sure?</div>
+                  <p style="color:#cbd5e1;font-size:13px;line-height:1.5;margin:8px 0 18px;">
+                    This will permanently erase your <strong>Level, Gold, XP, Upgrades, Pets, Fighting Styles, and Custom Combos</strong>. This cannot be undone.
+                  </p>
+                  <div class="btn-row">
+                    <button class="btn btn-primary" data-action="cancel-reset-save">Cancel (Keep Save)</button>
+                    <button class="btn btn-danger btn-sm" data-action="confirm-reset-save">Yes, Erase Everything</button>
+                  </div>
+                </div>
+              </div>
+            `
+            : ''
+        }
       </div>
     `;
   }
@@ -860,7 +880,14 @@ export class UIOverlay {
         } else if (act === 'reset-physics') {
           this.engine.physics.updateConfig(DEFAULT_PHYSICS_CONFIG);
           this.render();
-        } else if (act === 'reset-save') {
+        } else if (act === 'ask-reset-save') {
+          this.confirmingResetSave = true;
+          this.render();
+        } else if (act === 'cancel-reset-save') {
+          this.confirmingResetSave = false;
+          this.render();
+        } else if (act === 'confirm-reset-save') {
+          this.confirmingResetSave = false;
           this.engine.progress = resetProgress();
           this.engine.syncStatsFromProgress();
         }
