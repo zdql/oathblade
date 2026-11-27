@@ -576,7 +576,7 @@ export class GameEngine {
   }
 
   public startPracticeMinigame(kind: RoadMinigameKind): void {
-    const mg = createMinigameOfKind(kind, 0);
+    const mg = createMinigameOfKind(kind, 0, true);
     mg.active = true;
     this.arcadeMode = true;
     this.arcadeResult = null;
@@ -1225,7 +1225,7 @@ export class GameEngine {
     };
 
     if (mg.kind === 'anvil_timing') {
-      mg.cursor += mg.cursorDir * dt * 1.35;
+      mg.cursor += mg.cursorDir * dt * (this.arcadeMode ? 1.65 : 1.35);
       if (mg.cursor >= 1) {
         mg.cursor = 1;
         mg.cursorDir = -1;
@@ -1234,7 +1234,7 @@ export class GameEngine {
         mg.cursorDir = 1;
       }
       if (this.input.consumeAction('strong') || this.input.consumeAction('quick')) {
-        if (Math.abs(mg.cursor - 0.5) <= 0.14) {
+        if (Math.abs(mg.cursor - 0.5) <= (this.arcadeMode ? 0.12 : 0.14)) {
           mg.score += 1;
           mg.flashMsg = 'PERFECT STRIKE!';
           mg.flashTimer = 0.5;
@@ -1247,7 +1247,7 @@ export class GameEngine {
         }
       }
     } else if (mg.kind === 'parry_gauntlet') {
-      mg.cursor += dt * 0.85;
+      mg.cursor += dt * (this.arcadeMode ? 1.05 : 0.85);
       if (this.input.consumeAction('defense')) {
         if (mg.cursor >= 0.72 && mg.cursor <= 1.05) {
           mg.score += 1;
@@ -1375,9 +1375,9 @@ export class GameEngine {
       }
     } else if (mg.kind === 'blade_clash') {
       // Drains steadily; mashing K or J pushes it to 100%!
-      mg.cursor = Math.max(0.05, mg.cursor - dt * 0.24);
+      mg.cursor = Math.max(0.05, mg.cursor - dt * (this.arcadeMode ? 0.34 : 0.24));
       if (this.input.consumeAction('quick') || this.input.consumeAction('strong')) {
-        mg.cursor = Math.min(1, mg.cursor + 0.11);
+        mg.cursor = Math.min(1, mg.cursor + (this.arcadeMode ? 0.08 : 0.11));
         mg.flashMsg = 'PUSH!';
         mg.flashTimer = 0.2;
         this.sound.playGuardClang();

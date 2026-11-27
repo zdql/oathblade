@@ -533,7 +533,11 @@ const VARIANT_CONFIGS: Record<
   },
 };
 
-export function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMinigameState {
+export function createMinigameOfKind(
+  kind: RoadMinigameKind,
+  distance: number,
+  arcadeExtended = false
+): RoadMinigameState {
   const base = {
     kind,
     distance,
@@ -553,94 +557,120 @@ export function createMinigameOfKind(kind: RoadMinigameKind, distance: number): 
   };
 
   if (kind === 'anvil_timing') {
+    const target = arcadeExtended ? 10 : 3;
     return {
       ...base,
       title: 'Roadside Forge Anvil',
-      instructions: 'Tap J or K when the hammer hits the GOLD zone (3 hits)!',
-      maxTimer: 9,
-      targetScore: 3,
+      instructions: `Tap J or K when the hammer hits the GOLD zone (${target} hits)!`,
+      maxTimer: arcadeExtended ? 24 : 9,
+      targetScore: target,
       cursor: 0.1,
       promptKey: 'J',
     };
   }
   if (kind === 'parry_gauntlet') {
+    const target = arcadeExtended ? 10 : 4;
     return {
       ...base,
       title: 'Ambush Arrow Volley',
-      instructions: 'Tap L (Parry) when the arrow ring reaches the GOLD center (4 times)!',
-      maxTimer: 9.5,
-      targetScore: 4,
+      instructions: `Tap L (Parry) when the arrow ring reaches the GOLD center (${target} times)!`,
+      maxTimer: arcadeExtended ? 24 : 9.5,
+      targetScore: target,
       promptKey: 'L',
     };
   }
   if (kind === 'boulder_dodge') {
+    const dur = arcadeExtended ? 22 : 6.2;
     return {
       ...base,
       title: 'Tumbling Rockslide',
-      instructions: 'Move Left / Right (A / D or Stick) to dodge boulders for 6s!',
-      maxTimer: 6.2,
-      targetScore: 6,
-      lanes: [
-        { lane: 0, y: -0.2, speed: 0.65 },
-        { lane: 2, y: -0.65, speed: 0.72 },
-      ],
+      instructions: `Move Left / Right (A / D or Stick) to dodge boulders for ${Math.round(dur)}s!`,
+      maxTimer: dur,
+      targetScore: Math.round(dur),
+      lanes: arcadeExtended
+        ? [
+            { lane: 0, y: -0.15, speed: 0.85 },
+            { lane: 1, y: -0.55, speed: 0.92 },
+            { lane: 2, y: -0.95, speed: 0.88 },
+          ]
+        : [
+            { lane: 0, y: -0.2, speed: 0.65 },
+            { lane: 2, y: -0.65, speed: 0.72 },
+          ],
     };
   }
   if (kind === 'coin_catch') {
+    const target = arcadeExtended ? 14 : 5;
     return {
       ...base,
       title: 'Spilled Treasure Cart',
-      instructions: 'Move Left / Right (A / D or Stick) to catch 5 falling Gold Pouches!',
-      maxTimer: 8.5,
-      targetScore: 5,
-      lanes: [
-        { lane: 0, y: -0.1, speed: 0.62 },
-        { lane: 2, y: -0.55, speed: 0.68 },
-      ],
+      instructions: `Move Left / Right (A / D or Stick) to catch ${target} falling Gold Pouches!`,
+      maxTimer: arcadeExtended ? 24 : 8.5,
+      targetScore: target,
+      lanes: arcadeExtended
+        ? [
+            { lane: 0, y: -0.1, speed: 0.82 },
+            { lane: 2, y: -0.5, speed: 0.88 },
+          ]
+        : [
+            { lane: 0, y: -0.1, speed: 0.62 },
+            { lane: 2, y: -0.55, speed: 0.68 },
+          ],
     };
   }
   if (kind === 'blade_clash') {
     return {
       ...base,
       title: 'Steel Lock Tug-of-War',
-      instructions: 'Mash K or J rapidly to overpower the rival blade before time runs out!',
-      maxTimer: 7.5,
+      instructions: arcadeExtended
+        ? 'Endurance Clash! Mash K or J relentlessly against heavy resistance!'
+        : 'Mash K or J rapidly to overpower the rival blade before time runs out!',
+      maxTimer: arcadeExtended ? 22 : 7.5,
       targetScore: 100,
-      cursor: 0.38,
+      cursor: arcadeExtended ? 0.22 : 0.38,
     };
   }
   if (kind === 'stance_mirror') {
     const dirs: StanceDir[] = ['LEFT', 'RIGHT', 'UP', 'DOWN'];
+    const target = arcadeExtended ? 14 : 5;
     return {
       ...base,
       title: "Sensei's Stance Test",
-      instructions: 'Push the shown direction (WASD or Thumbstick) 5 times!',
-      maxTimer: 8.5,
-      targetScore: 5,
+      instructions: `Push the shown direction (WASD or Thumbstick) ${target} times!`,
+      maxTimer: arcadeExtended ? 24 : 8.5,
+      targetScore: target,
       stanceDir: dirs[Math.floor(Math.random() * dirs.length)],
     };
   }
   if (kind === 'whetstone_rhythm') {
+    const target = arcadeExtended ? 18 : 6;
     return {
       ...base,
       title: 'Master Whetstone Drill',
-      instructions: 'Alternate K then J (6 strokes) to hone your Oathblade!',
-      maxTimer: 8.0,
-      targetScore: 6,
+      instructions: `Alternate K then J (${target} strokes) to hone your Oathblade!`,
+      maxTimer: arcadeExtended ? 22 : 8.0,
+      targetScore: target,
       promptKey: 'K',
     };
   }
   if (kind === 'arrow_volley') {
+    const target = arcadeExtended ? 14 : 5;
     return {
       ...base,
       title: 'Shield Wall Volley',
-      instructions: 'Shift Left / Right (A / D or Stick) to block 5 incoming arrows!',
-      maxTimer: 9.0,
-      targetScore: 5,
-      lanes: [
-        { lane: 0, y: -0.15, speed: 0.72 },
-        { lane: 2, y: -0.6, speed: 0.76 },
-      ],
+      instructions: `Shift Left / Right (A / D or Stick) to block ${target} incoming arrows!`,
+      maxTimer: arcadeExtended ? 24 : 9.0,
+      targetScore: target,
+      lanes: arcadeExtended
+        ? [
+            { lane: 0, y: -0.1, speed: 0.9 },
+            { lane: 1, y: -0.5, speed: 0.96 },
+            { lane: 2, y: -0.9, speed: 0.92 },
+          ]
+        : [
+            { lane: 0, y: -0.15, speed: 0.72 },
+            { lane: 2, y: -0.6, speed: 0.76 },
+          ],
     };
   }
   if (kind === 'combo_drill') {
@@ -650,43 +680,47 @@ export function createMinigameOfKind(kind: RoadMinigameKind, distance: number): 
       ['K', 'L', 'J'],
       ['L', 'K', 'K'],
     ];
+    const target = arcadeExtended ? 8 : 3;
     return {
       ...base,
       title: "Sensei's Combo Chain",
-      instructions: 'Input the 3-key sword sequence (K / J / L) 3 times cleanly!',
-      maxTimer: 10.0,
-      targetScore: 3,
+      instructions: `Input the 3-key sword sequence (K / J / L) ${target} times cleanly!`,
+      maxTimer: arcadeExtended ? 25 : 10.0,
+      targetScore: target,
       comboSeq: seqs[Math.floor(Math.random() * seqs.length)],
       comboStep: 0,
     };
   }
   if (kind === 'forge_bellows') {
+    const target = arcadeExtended ? 110 : 30;
     return {
       ...base,
       title: 'Forge Bellows Heat',
-      instructions: 'Tap K to pump the bellows & keep heat inside the ORANGE band!',
-      maxTimer: 8.5,
-      targetScore: 30, // 3.0 seconds inside the sweet band (counted in tenths)
+      instructions: `Tap K to pump the bellows & keep heat in the ORANGE band for ${(target / 10).toFixed(0)}s!`,
+      maxTimer: arcadeExtended ? 24 : 8.5,
+      targetScore: target,
       cursor: 0.45,
     };
   }
   if (kind === 'dash_hurdles') {
+    const target = arcadeExtended ? 10 : 4;
     return {
       ...base,
       title: 'Dash Sprint Hurdles',
-      instructions: 'Tap H (Dash) or L right as the hurdle crosses the CYAN line (4 clears)!',
-      maxTimer: 9.5,
-      targetScore: 4,
+      instructions: `Tap H (Dash) or L right as the hurdle crosses the CYAN line (${target} clears)!`,
+      maxTimer: arcadeExtended ? 24 : 9.5,
+      targetScore: target,
       cursor: 0.0,
     };
   }
   const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
+  const target = arcadeExtended ? 14 : 5;
   return {
     ...base,
     title: 'Master Dummy Drill',
-    instructions: 'Match the flashed swordplay key (K, J, or L) 5 times quickly!',
-    maxTimer: 8.5,
-    targetScore: 5,
+    instructions: `Match the flashed swordplay key (K, J, or L) ${target} times quickly!`,
+    maxTimer: arcadeExtended ? 24 : 8.5,
+    targetScore: target,
     promptKey: keys[Math.floor(Math.random() * keys.length)],
   };
 }

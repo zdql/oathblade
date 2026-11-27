@@ -638,11 +638,11 @@ export class UIOverlay {
         </div>
         <div class="shop-grid">
           ${ALL_MINIGAME_KINDS.map((kind) => {
-            const sample = createMinigameOfKind(kind, 0);
+            const sample = createMinigameOfKind(kind, 0, true);
             return `
               <div class="shop-item" style="border-color:rgba(128,222,234,0.28);">
                 <div>
-                  <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">Just for Fun</span></h4>
+                  <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">${Math.round(sample.maxTimer)}s • Fun</span></h4>
                   <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
                 </div>
                 <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
