@@ -22,9 +22,10 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics';
 import type { SoundEngine } from '../audio/soundEngine';
 import { renderBossPortraitDataUrl } from '../render/bossPixelSprites';
 import { FIGHTING_STYLES, getStyleUpgradeCost, type FightingStyleId } from '../game/fightingStyles';
+import { ALL_MINIGAME_KINDS, createMinigameOfKind, type RoadMinigameKind } from '../game/runContent';
 import type { TouchControls } from './touchControls';
 
-type SanctuaryTab = 'upgrades' | 'gear' | 'pets' | 'styles' | 'combos' | 'forge';
+type SanctuaryTab = 'upgrades' | 'gear' | 'pets' | 'styles' | 'combos' | 'forge' | 'minigames';
 
 export class UIOverlay {
   private container: HTMLElement;
@@ -72,6 +73,8 @@ export class UIOverlay {
       html += this.renderRunSummary(e.screen === 'victory_run');
     } else if (e.screen === 'sanctuary') {
       html += this.renderSanctuary();
+    } else if (e.screen === 'minigame_arcade') {
+      html += this.renderMinigameArcadeOverlay();
     }
 
     this.container.innerHTML = html;
@@ -89,10 +92,15 @@ export class UIOverlay {
     const muteLabel = this.sound.muted ? 'Audio: Off' : 'Audio: On';
     const physLabel = this.engine.showPhysicsDebug ? 'Physics: On' : 'Physics (F1)';
     const touchLabel = this.touchControls.enabled ? 'Touch: On' : 'Touch: Off';
-    const showSanctuaryBtn = this.engine.screen === 'path' || this.engine.screen === 'combat';
+    const showSanctuaryBtn =
+      this.engine.screen === 'path' || this.engine.screen === 'combat' || this.engine.screen === 'minigame_arcade';
     return `
       <div class="top-tools">
-        ${showSanctuaryBtn ? `<button class="btn btn-secondary btn-sm" data-action="open-sanctuary">Sanctuary</button>` : ''}
+        ${
+          showSanctuaryBtn
+            ? `<button class="btn btn-secondary btn-sm" data-action="${this.engine.screen === 'minigame_arcade' ? 'exit-arcade' : 'open-sanctuary'}">${this.engine.screen === 'minigame_arcade' ? 'Back to Minigames' : 'Sanctuary'}</button>`
+            : ''
+        }
         <button class="btn btn-secondary btn-sm" data-action="toggle-touch">${touchLabel}</button>
         <button class="btn btn-secondary btn-sm" data-action="toggle-physics">${physLabel}</button>
         <button class="btn btn-secondary btn-sm" data-action="toggle-mute">${muteLabel}</button>
@@ -473,6 +481,31 @@ export class UIOverlay {
     });
   }
 
+  private renderMinigameArcadeOverlay(): string {
+    const res = this.engine.arcadeResult;
+    if (!res) return '';
+    return `
+      <div class="overlay-screen">
+        <div class="card run-summary-card" style="text-align:center;max-width:520px;border-color:${res.won ? '#69f0ae' : '#ff8a80'};">
+          <div class="tape-tier" style="color:#80deea;">Sanctuary Minigames Arcade • Just For Fun</div>
+          <div class="title-logo" style="font-size:32px;margin:6px 0;color:${res.won ? '#69f0ae' : '#ff8a80'};">
+            ${res.won ? 'Minigame Cleared!' : "Time's Up!"}
+          </div>
+          <p style="color:#e2e8f0;font-size:15px;margin:8px 0;">
+            <strong>${res.title}</strong>
+          </p>
+          <p style="color:#94a3b8;font-size:12px;margin-bottom:16px;">
+            Free-Play Mode — No Gold, XP, or HP rewards (just for fun!).
+          </p>
+          <div class="btn-row">
+            <button class="btn btn-primary" data-play-arcade="${res.kind}">Play Again</button>
+            <button class="btn btn-secondary" data-action="exit-arcade">Back to Minigames</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderSanctuary(): string {
     const p = this.engine.progress;
     const s = this.engine.stats;
@@ -598,6 +631,26 @@ export class UIOverlay {
             .join('')}
         </div>
       `;
+    } else if (this.activeTab === 'minigames') {
+      bodyHtml = `
+        <div style="margin-bottom:10px;padding:10px 12px;border-radius:10px;background:rgba(128,222,234,0.1);border:1px solid rgba(128,222,234,0.35);font-size:12px;color:#e0f7fa;">
+          <strong>Sanctuary Minigames Arcade (${ALL_MINIGAME_KINDS.length} Games):</strong> Pick any minigame below to play immediately — <strong>no rewards, just for fun!</strong>
+        </div>
+        <div class="shop-grid">
+          ${ALL_MINIGAME_KINDS.map((kind) => {
+            const sample = createMinigameOfKind(kind, 0);
+            return `
+              <div class="shop-item" style="border-color:rgba(128,222,234,0.28);">
+                <div>
+                  <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">Just for Fun</span></h4>
+                  <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
+                </div>
+                <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
     } else {
       const preview = buildCustomCombo({
         name: this.draftName,
@@ -699,6 +752,7 @@ export class UIOverlay {
             <button class="tab-btn ${this.activeTab === 'styles' ? 'active' : ''}" data-tab="styles">Fighting Styles</button>
             <button class="tab-btn ${this.activeTab === 'combos' ? 'active' : ''}" data-tab="combos">Combos</button>
             <button class="tab-btn ${this.activeTab === 'forge' ? 'active' : ''}" data-tab="forge">Combo Forge</button>
+            <button class="tab-btn ${this.activeTab === 'minigames' ? 'active' : ''}" data-tab="minigames">Minigames</button>
           </div>
 
           <div class="shop-scroll">${bodyHtml}</div>
@@ -722,6 +776,10 @@ export class UIOverlay {
         else if (act === 'enter-raid') this.engine.enterAreaRaid();
         else if (act === 'decline-raid') this.engine.declineAreaRaid();
         else if (act === 'return-from-raid') this.engine.returnFromRaidToRoad();
+        else if (act === 'exit-arcade') {
+          this.activeTab = 'minigames';
+          this.engine.exitPracticeMinigame();
+        }
         else if (act === 'next-boss') this.engine.continuePathToNextBoss();
         else if (act === 'toggle-mute') {
           this.sound.muted = !this.sound.muted;
@@ -752,6 +810,12 @@ export class UIOverlay {
       el.addEventListener('click', () => {
         this.activeTab = el.dataset.tab as SanctuaryTab;
         this.render(true);
+      });
+    });
+
+    this.container.querySelectorAll<HTMLElement>('[data-play-arcade]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.engine.startPracticeMinigame(el.dataset.playArcade as RoadMinigameKind);
       });
     });
 

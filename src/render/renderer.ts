@@ -90,15 +90,18 @@ export class GameRenderer {
     } else {
       drawBiomeBackdrop(
         ctx,
-        engine.screen === 'sanctuary' ? 'forest' : biome,
+        engine.screen === 'sanctuary' || engine.screen === 'minigame_arcade' ? 'forest' : biome,
         this.width,
         this.height,
         this.clock,
         Math.sin(this.clock * 0.3) * 80,
         290
       );
-      if (engine.screen === 'sanctuary') {
+      if (engine.screen === 'sanctuary' || engine.screen === 'minigame_arcade') {
         this.renderSanctuaryCampfire();
+      }
+      if (engine.screen === 'minigame_arcade' && engine.activeRoadMinigame && engine.activeRoadMinigame.active) {
+        this.renderRoadMinigame(engine);
       }
     }
 
@@ -461,9 +464,10 @@ export class GameRenderer {
     ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffd54f';
+    ctx.fillStyle = engine.arcadeMode ? '#80deea' : '#ffd54f';
     ctx.font = '800 13px system-ui, sans-serif';
-    ctx.fillText(`ROADSIDE MINIGAME  •  TIME: ${Math.max(0, mg.maxTimer - mg.timer).toFixed(1)}s`, cx, cy - 104);
+    const modeTag = engine.arcadeMode ? 'SANCTUARY ARCADE (JUST FOR FUN)' : 'ROADSIDE MINIGAME';
+    ctx.fillText(`${modeTag}  •  TIME: ${Math.max(0, mg.maxTimer - mg.timer).toFixed(1)}s`, cx, cy - 104);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 24px Georgia, serif';
@@ -506,27 +510,96 @@ export class GameRenderer {
       ctx.fillStyle = '#69f0ae';
       ctx.font = '700 14px system-ui, sans-serif';
       ctx.fillText(`Deflected: ${mg.score} / ${mg.targetScore}`, cx, cy + 88);
-    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch') {
+    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch' || mg.kind === 'arrow_volley') {
       const laneW = 110;
       const startX = cx - laneW * 1.5;
       for (let i = 0; i < 3; i++) {
         ctx.fillStyle = i === mg.playerLane ? 'rgba(105, 240, 174, 0.22)' : 'rgba(255,255,255,0.06)';
         ctx.fillRect(startX + i * laneW + 4, cy - 28, laneW - 8, 128);
       }
-      ctx.fillStyle = '#69f0ae';
-      ctx.fillRect(startX + mg.playerLane * laneW + laneW / 2 - 14, cy + 72, 28, 22);
-      ctx.fillStyle = mg.kind === 'coin_catch' ? '#ffd740' : '#ff9100';
+      ctx.fillStyle = mg.kind === 'arrow_volley' ? '#80deea' : '#69f0ae';
+      ctx.fillRect(startX + mg.playerLane * laneW + laneW / 2 - 16, cy + 72, 32, 22);
+      ctx.fillStyle =
+        mg.kind === 'coin_catch' ? '#ffd740' : mg.kind === 'arrow_volley' ? '#e0f7fa' : '#ff9100';
       for (const b of mg.lanes) {
         if (b.y < 0) continue;
-        ctx.beginPath();
-        ctx.arc(startX + b.lane * laneW + laneW / 2, cy - 20 + b.y * 105, 16, 0, Math.PI * 2);
-        ctx.fill();
+        const bx = startX + b.lane * laneW + laneW / 2;
+        const by = cy - 20 + b.y * 105;
+        if (mg.kind === 'arrow_volley') {
+          ctx.fillRect(bx - 3, by - 14, 6, 22);
+          ctx.beginPath();
+          ctx.moveTo(bx, by + 14);
+          ctx.lineTo(bx - 8, by + 4);
+          ctx.lineTo(bx + 8, by + 4);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(bx, by, 16, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      if (mg.kind === 'coin_catch') {
-        ctx.fillStyle = '#ffd740';
+      if (mg.kind === 'coin_catch' || mg.kind === 'arrow_volley') {
+        ctx.fillStyle = mg.kind === 'arrow_volley' ? '#80deea' : '#ffd740';
         ctx.font = '700 14px system-ui, sans-serif';
-        ctx.fillText(`Caught: ${mg.score} / ${mg.targetScore}`, cx, cy + 116);
+        ctx.fillText(
+          `${mg.kind === 'arrow_volley' ? 'Blocked' : 'Caught'}: ${mg.score} / ${mg.targetScore}`,
+          cx,
+          cy + 116
+        );
       }
+    } else if (mg.kind === 'combo_drill') {
+      const seq = mg.comboSeq ?? ['K', 'K', 'J'];
+      const step = mg.comboStep ?? 0;
+      const boxW = 68;
+      const gap = 18;
+      const totalW = seq.length * boxW + (seq.length - 1) * gap;
+      const sx = cx - totalW / 2;
+      for (let i = 0; i < seq.length; i++) {
+        const bx = sx + i * (boxW + gap);
+        ctx.fillStyle =
+          i < step ? 'rgba(105, 240, 174, 0.32)' : i === step ? 'rgba(255, 215, 64, 0.25)' : 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.roundRect(bx, cy - 16, boxW, 56, 10);
+        ctx.fill();
+        ctx.strokeStyle = i < step ? '#69f0ae' : i === step ? '#ffd740' : 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = i === step ? 3 : 1.5;
+        ctx.stroke();
+        ctx.fillStyle = i < step ? '#69f0ae' : i === step ? '#ffd740' : '#ffffff';
+        ctx.font = '900 30px system-ui, sans-serif';
+        ctx.fillText(seq[i], bx + boxW / 2, cy + 22);
+      }
+      ctx.fillStyle = '#69f0ae';
+      ctx.font = '700 15px system-ui, sans-serif';
+      ctx.fillText(`Combos: ${mg.score} / ${mg.targetScore}`, cx, cy + 78);
+    } else if (mg.kind === 'forge_bellows') {
+      const barW = 420;
+      const bx = cx - barW / 2;
+      ctx.fillStyle = '#263238';
+      ctx.fillRect(bx, cy - 8, barW, 28);
+      ctx.fillStyle = 'rgba(255, 145, 0, 0.65)';
+      ctx.fillRect(bx + barW * 0.48, cy - 8, barW * 0.3, 28);
+      const curX = bx + mg.cursor * barW;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(curX - 5, cy - 16, 10, 44);
+      ctx.fillStyle = '#ffab40';
+      ctx.font = '700 15px system-ui, sans-serif';
+      ctx.fillText(`Heat Held: ${(mg.score / 10).toFixed(1)}s / ${(mg.targetScore / 10).toFixed(1)}s`, cx, cy + 58);
+    } else if (mg.kind === 'dash_hurdles') {
+      const barW = 420;
+      const bx = cx - barW / 2;
+      ctx.fillStyle = '#1b2630';
+      ctx.fillRect(bx, cy - 6, barW, 26);
+      // Cyan strike zone on right side
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+      ctx.fillRect(bx + barW * 0.72, cy - 6, barW * 0.24, 26);
+      // Approaching hurdle marker
+      const hx = bx + Math.min(1, mg.cursor) * barW;
+      ctx.fillStyle = '#ff9100';
+      ctx.fillRect(hx - 6, cy - 16, 12, 46);
+      ctx.fillStyle = '#00e5ff';
+      ctx.font = '700 15px system-ui, sans-serif';
+      ctx.fillText(`Cleared: ${mg.score} / ${mg.targetScore}   (Press H or L)`, cx, cy + 58);
     } else if (mg.kind === 'blade_clash') {
       const barW = 420;
       const bx = cx - barW / 2;

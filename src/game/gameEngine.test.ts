@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine, type SoundHooks } from './gameEngine';
+import { ALL_MINIGAME_KINDS } from './runContent';
 
 const noopSound: SoundHooks = {
   playSwing: () => {},
@@ -59,17 +60,9 @@ describe('GameEngine end-to-end flow', () => {
     expect(engine.pathState.targetDistance).toBeGreaterThanOrEqual(3600);
     expect(engine.roadGuardians.length).toBeGreaterThanOrEqual(10);
     expect(engine.roadMinigames.length).toBeGreaterThanOrEqual(2);
+    expect(ALL_MINIGAME_KINDS).toHaveLength(12);
     for (const m of engine.roadMinigames) {
-      expect([
-        'anvil_timing',
-        'parry_gauntlet',
-        'boulder_dodge',
-        'target_slash',
-        'coin_catch',
-        'blade_clash',
-        'stance_mirror',
-        'whetstone_rhythm',
-      ]).toContain(m.kind);
+      expect(ALL_MINIGAME_KINDS).toContain(m.kind);
     }
     const miniBosses = engine.roadGuardians.filter((g) => g.isMiniBoss);
     expect(miniBosses).toHaveLength(1);

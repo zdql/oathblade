@@ -37,6 +37,7 @@ import {
 import { PixelVfxManager } from '../render/vfxSprites';
 import type { ActiveBossAreaAttack } from '../render/bossAreaRenderer';
 import {
+  createMinigameOfKind,
   generateRoadHealthPacks,
   generateRoadMinigames,
   generateRoadRaidPortal,
@@ -46,6 +47,7 @@ import {
   spawnRoadGuardians,
   type RoadGuardian,
   type RoadHealthPack,
+  type RoadMinigameKind,
   type RoadMinigameState,
   type RoadRaidPortal,
   type RoadTreasureChest,
@@ -65,7 +67,8 @@ export type GameScreen =
   | 'victory_raid'
   | 'victory_run'
   | 'run_summary'
-  | 'sanctuary';
+  | 'sanctuary'
+  | 'minigame_arcade';
 
 export type PlayerActionState =
   | 'idle'
@@ -217,6 +220,14 @@ export class GameEngine {
   public isRaidFight = false;
   public roadMinigames: RoadMinigameState[] = [];
   public activeRoadMinigame: RoadMinigameState | null = null;
+  public arcadeMode = false;
+  public arcadeResult: {
+    kind: RoadMinigameKind;
+    title: string;
+    won: boolean;
+    score: number;
+    targetScore: number;
+  } | null = null;
   public minigameLaneCooldown = 0;
   /** Minions dynamically summoned by bosses during combat! */
   public arenaMinions: Array<RoadGuardian & { y: number }> = [];
@@ -555,7 +566,32 @@ export class GameEngine {
   }
 
   public openSanctuary(): void {
+    this.arcadeMode = false;
+    this.arcadeResult = null;
+    this.activeRoadMinigame = null;
     this.syncStatsFromProgress();
+    this.screen = 'sanctuary';
+    this.input.clearBuffers();
+    this.notifyUI();
+  }
+
+  public startPracticeMinigame(kind: RoadMinigameKind): void {
+    const mg = createMinigameOfKind(kind, 0);
+    mg.active = true;
+    this.arcadeMode = true;
+    this.arcadeResult = null;
+    this.activeRoadMinigame = mg;
+    this.minigameLaneCooldown = 0;
+    this.screen = 'minigame_arcade';
+    this.input.clearBuffers();
+    this.sound.playBossTelegraph();
+    this.notifyUI();
+  }
+
+  public exitPracticeMinigame(): void {
+    this.arcadeMode = false;
+    this.arcadeResult = null;
+    this.activeRoadMinigame = null;
     this.screen = 'sanctuary';
     this.input.clearBuffers();
     this.notifyUI();
@@ -674,6 +710,14 @@ export class GameEngine {
 
     if (this.screen === 'path') {
       this.updatePath(dt);
+    } else if (this.screen === 'minigame_arcade') {
+      if (this.input.consumeAction('escape')) {
+        this.exitPracticeMinigame();
+        return;
+      }
+      if (this.activeRoadMinigame && this.activeRoadMinigame.active) {
+        this.updateRoadMinigame(dt);
+      }
     } else if (this.screen === 'tale_of_tape') {
       this.tapeTimer += dt;
       if (
@@ -1143,6 +1187,25 @@ export class GameEngine {
       mg.completed = true;
       mg.succeeded = won;
       this.activeRoadMinigame = null;
+      if (this.arcadeMode) {
+        // Sanctuary Free-Play Arcade: strictly NO rewards (just for fun!)
+        this.arcadeResult = {
+          kind: mg.kind,
+          title: mg.title,
+          won,
+          score: Math.floor(mg.score),
+          targetScore: mg.targetScore,
+        };
+        if (won) {
+          this.effects.addFlash('#69f0ae', 0.28);
+          this.sound.playVictory();
+        } else {
+          this.sound.playPlayerHurt();
+          this.effects.addShake(5, 0.18);
+        }
+        this.notifyUI();
+        return;
+      }
       const bossInst = this.gauntlet[this.currentTierIndex] ?? this.gauntlet[0];
       if (won) {
         const bountyMul = this.getBountyBonusMultiplier();
@@ -1205,7 +1268,7 @@ export class GameEngine {
         mg.flashTimer = 0.4;
         this.sound.playPlayerHurt();
       }
-    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch') {
+    } else if (mg.kind === 'boulder_dodge' || mg.kind === 'coin_catch' || mg.kind === 'arrow_volley') {
       const move = this.input.getMoveVector();
       if (this.minigameLaneCooldown <= 0) {
         if (move.x < -0.3 && mg.playerLane > 0) {
@@ -1223,14 +1286,14 @@ export class GameEngine {
         if (b.y > 0.8 && b.y < 0.98 && b.lane === mg.playerLane) {
           b.y = -0.2;
           b.lane = Math.floor(Math.random() * 3);
-          if (mg.kind === 'coin_catch') {
+          if (mg.kind === 'coin_catch' || mg.kind === 'arrow_volley') {
             mg.score += 1;
-            mg.flashMsg = '+GOLD POUCH!';
+            mg.flashMsg = mg.kind === 'arrow_volley' ? 'ARROW BLOCKED!' : '+GOLD POUCH!';
             mg.flashTimer = 0.4;
             this.sound.playParry();
             if (mg.score >= mg.targetScore) return finish(true);
           } else {
-            this.applyPlayerIncomingDamage(12);
+            if (!this.arcadeMode) this.applyPlayerIncomingDamage(12);
             mg.flashMsg = 'HIT BY BOULDER!';
             mg.flashTimer = 0.45;
             this.sound.playPlayerHurt();
@@ -1242,6 +1305,74 @@ export class GameEngine {
         }
       }
       if (mg.kind === 'boulder_dodge' && mg.timer >= mg.maxTimer) return finish(true);
+    } else if (mg.kind === 'combo_drill') {
+      const seq = mg.comboSeq ?? ['K', 'K', 'J'];
+      const step = mg.comboStep ?? 0;
+      const pressed: 'K' | 'J' | 'L' | null = this.input.consumeAction('quick')
+        ? 'K'
+        : this.input.consumeAction('strong')
+        ? 'J'
+        : this.input.consumeAction('defense')
+        ? 'L'
+        : null;
+      if (pressed) {
+        if (pressed === seq[step]) {
+          mg.comboStep = step + 1;
+          this.sound.playHit(false, false);
+          if (mg.comboStep >= seq.length) {
+            mg.score += 1;
+            mg.comboStep = 0;
+            const seqs: Array<Array<'K' | 'J' | 'L'>> = [
+              ['K', 'K', 'J'],
+              ['J', 'K', 'L'],
+              ['K', 'L', 'J'],
+              ['L', 'K', 'K'],
+            ];
+            mg.comboSeq = seqs[Math.floor(Math.random() * seqs.length)];
+            mg.flashMsg = 'COMBO COMPLETE!';
+            mg.flashTimer = 0.45;
+            this.sound.playParry();
+            if (mg.score >= mg.targetScore) return finish(true);
+          }
+        } else {
+          mg.comboStep = 0;
+          mg.flashMsg = 'RESET!';
+          mg.flashTimer = 0.35;
+          this.sound.playGuardClang();
+        }
+      }
+    } else if (mg.kind === 'forge_bellows') {
+      mg.cursor = Math.max(0, mg.cursor - dt * 0.36);
+      if (this.input.consumeAction('quick') || this.input.consumeAction('strong')) {
+        mg.cursor = Math.min(1, mg.cursor + 0.16);
+        this.sound.playSwing(false);
+      }
+      if (mg.cursor >= 0.48 && mg.cursor <= 0.78) {
+        mg.score += dt * 10;
+        if (mg.score >= mg.targetScore) return finish(true);
+      }
+    } else if (mg.kind === 'dash_hurdles') {
+      mg.cursor += dt * 0.88;
+      if (this.input.consumeAction('dash') || this.input.consumeAction('defense')) {
+        if (mg.cursor >= 0.72 && mg.cursor <= 1.02) {
+          mg.score += 1;
+          mg.cursor = 0;
+          mg.flashMsg = 'CLEAN DASH!';
+          mg.flashTimer = 0.45;
+          this.sound.playDodge();
+          if (mg.score >= mg.targetScore) return finish(true);
+        } else {
+          mg.flashMsg = 'EARLY!';
+          mg.flashTimer = 0.35;
+          this.sound.playGuardClang();
+        }
+      }
+      if (mg.cursor > 1.06) {
+        mg.cursor = 0;
+        mg.flashMsg = 'TRIPPED!';
+        mg.flashTimer = 0.4;
+        this.sound.playPlayerHurt();
+      }
     } else if (mg.kind === 'blade_clash') {
       // Drains steadily; mashing K or J pushes it to 100%!
       mg.cursor = Math.max(0.05, mg.cursor - dt * 0.24);

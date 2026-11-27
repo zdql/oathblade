@@ -33,7 +33,10 @@ export class TouchControls {
   }
 
   public syncVisibility(): void {
-    const playable = this.engine.screen === 'path' || this.engine.screen === 'combat';
+    const playable =
+      this.engine.screen === 'path' ||
+      this.engine.screen === 'combat' ||
+      (this.engine.screen === 'minigame_arcade' && !this.engine.arcadeResult);
     this.root.style.display = this.enabled && playable ? 'flex' : 'none';
     if (!playable) {
       this.activeDpadPointer = null;

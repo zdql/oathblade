@@ -140,7 +140,26 @@ export type RoadMinigameKind =
   | 'coin_catch'
   | 'blade_clash'
   | 'stance_mirror'
-  | 'whetstone_rhythm';
+  | 'whetstone_rhythm'
+  | 'arrow_volley'
+  | 'combo_drill'
+  | 'forge_bellows'
+  | 'dash_hurdles';
+
+export const ALL_MINIGAME_KINDS: RoadMinigameKind[] = [
+  'anvil_timing',
+  'parry_gauntlet',
+  'boulder_dodge',
+  'target_slash',
+  'coin_catch',
+  'blade_clash',
+  'stance_mirror',
+  'whetstone_rhythm',
+  'arrow_volley',
+  'combo_drill',
+  'forge_bellows',
+  'dash_hurdles',
+];
 
 export type StanceDir = 'LEFT' | 'RIGHT' | 'UP' | 'DOWN';
 
@@ -263,6 +282,8 @@ export interface RoadMinigameState {
   cursorDir: number;
   promptKey: 'K' | 'J' | 'L';
   stanceDir: StanceDir;
+  comboSeq?: Array<'K' | 'J' | 'L'>;
+  comboStep?: number;
   lanes: Array<{ lane: number; y: number; speed: number }>;
   playerLane: number;
   flashMsg: string;
@@ -512,7 +533,7 @@ const VARIANT_CONFIGS: Record<
   },
 };
 
-function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMinigameState {
+export function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMinigameState {
   const base = {
     kind,
     distance,
@@ -609,6 +630,56 @@ function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMin
       promptKey: 'K',
     };
   }
+  if (kind === 'arrow_volley') {
+    return {
+      ...base,
+      title: 'Shield Wall Volley',
+      instructions: 'Shift Left / Right (A / D or Stick) to block 5 incoming arrows!',
+      maxTimer: 9.0,
+      targetScore: 5,
+      lanes: [
+        { lane: 0, y: -0.15, speed: 0.72 },
+        { lane: 2, y: -0.6, speed: 0.76 },
+      ],
+    };
+  }
+  if (kind === 'combo_drill') {
+    const seqs: Array<Array<'K' | 'J' | 'L'>> = [
+      ['K', 'K', 'J'],
+      ['J', 'K', 'L'],
+      ['K', 'L', 'J'],
+      ['L', 'K', 'K'],
+    ];
+    return {
+      ...base,
+      title: "Sensei's Combo Chain",
+      instructions: 'Input the 3-key sword sequence (K / J / L) 3 times cleanly!',
+      maxTimer: 10.0,
+      targetScore: 3,
+      comboSeq: seqs[Math.floor(Math.random() * seqs.length)],
+      comboStep: 0,
+    };
+  }
+  if (kind === 'forge_bellows') {
+    return {
+      ...base,
+      title: 'Forge Bellows Heat',
+      instructions: 'Tap K to pump the bellows & keep heat inside the ORANGE band!',
+      maxTimer: 8.5,
+      targetScore: 30, // 3.0 seconds inside the sweet band (counted in tenths)
+      cursor: 0.45,
+    };
+  }
+  if (kind === 'dash_hurdles') {
+    return {
+      ...base,
+      title: 'Dash Sprint Hurdles',
+      instructions: 'Tap H (Dash) or L right as the hurdle crosses the CYAN line (4 clears)!',
+      maxTimer: 9.5,
+      targetScore: 4,
+      cursor: 0.0,
+    };
+  }
   const keys: Array<'K' | 'J' | 'L'> = ['K', 'J', 'L'];
   return {
     ...base,
@@ -626,16 +697,7 @@ function createMinigameOfKind(kind: RoadMinigameKind, distance: number): RoadMin
  * gives different minigames in those spots!
  */
 export function generateRoadMinigames(targetDistance: number, tier = 1): RoadMinigameState[] {
-  const pool: RoadMinigameKind[] = [
-    'anvil_timing',
-    'parry_gauntlet',
-    'boulder_dodge',
-    'target_slash',
-    'coin_catch',
-    'blade_clash',
-    'stance_mirror',
-    'whetstone_rhythm',
-  ];
+  const pool: RoadMinigameKind[] = [...ALL_MINIGAME_KINDS];
   const count = tier >= 3 ? 3 : 2;
   const fracs = count === 3 ? [0.27, 0.54, 0.8] : [0.34, 0.68];
   const games: RoadMinigameState[] = [];
