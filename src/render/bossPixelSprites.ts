@@ -11,6 +11,7 @@ export interface BossSpriteDrawParams {
   isShielding: boolean;
   flashHit: boolean;
   accentColor: string;
+  isRaidBoss?: boolean;
 }
 
 const bossBuf = new PixelCanvas(80, 80);
@@ -36,7 +37,11 @@ export function renderBossPixelSprite(
 /**
  * Renders a crisp static/idle data URL portrait of a boss for the Tale of the Tape UI!
  */
-export function renderBossPortraitDataUrl(visualId: BossVisualId, accentColor: string): string {
+export function renderBossPortraitDataUrl(
+  visualId: BossVisualId,
+  accentColor: string,
+  isRaidBoss = false
+): string {
   if (typeof document === 'undefined') return '';
   const buf = new PixelCanvas(80, 80);
   drawBossToPixelCanvas(buf, {
@@ -47,6 +52,7 @@ export function renderBossPortraitDataUrl(visualId: BossVisualId, accentColor: s
     isShielding: visualId === 'ogre_knight',
     flashHit: false,
     accentColor,
+    isRaidBoss,
   });
   return buf.canvas.toDataURL('image/png');
 }
@@ -207,6 +213,19 @@ function drawBossToPixelCanvas(p: PixelCanvas, params: BossSpriteDrawParams): vo
     }
   }
 
+  // Custom Raid Boss Background Rift Aura & Orbiting Runic Shards
+  if (params.isRaidBoss && event !== 'defeated') {
+    const rPulse = 24 + Math.round(Math.sin(t * Math.PI * 2) * 3);
+    p.ellipse(cx, cy - 10, rPulse, Math.round(rPulse * 0.78), 'rgba(34, 10, 56, 0.55)', accentColor);
+    for (let i = 0; i < 4; i++) {
+      const ang = t * Math.PI * 2 + (i * Math.PI) / 2;
+      const sx = cx + Math.round(Math.cos(ang) * 28);
+      const sy = cy - 12 + Math.round(Math.sin(ang) * 18);
+      p.rect(sx - 2, sy - 3, 4, 6, '#140822');
+      p.rect(sx - 1, sy - 2, 2, 4, i % 2 === 0 ? accentColor : '#ffd740');
+    }
+  }
+
   // Phase II crackling pixel aura
   if (phase === 2 && event !== 'defeated') {
     const aOff = frame % 4;
@@ -235,6 +254,23 @@ function drawBossToPixelCanvas(p: PixelCanvas, params: BossSpriteDrawParams): vo
     drawAurelionPixel(p, cx, cy, t, wingFlap, weaponAngle, isShielding, phase, whiteOut, showSmear);
   } else {
     drawMalakorPixel(p, cx, cy, t, weaponAngle, phase, whiteOut, showSmear);
+  }
+
+  // Custom Raid Boss Texturing: Gilded Obsidian Crown, Runic Energy Veins & Rift Sigils!
+  if (params.isRaidBoss && event !== 'defeated') {
+    const bob = Math.round(Math.sin(t * Math.PI * 2) * 2);
+    // Floating Obsidian & Gold Raid Sovereign Crown
+    p.rect(cx - 12, cy - 42 + bob, 24, 4, '#1a0a28');
+    p.rect(cx - 11, cy - 41 + bob, 22, 2, '#ffd740');
+    p.rect(cx - 10, cy - 46 + bob, 3, 5, '#ffd740');
+    p.rect(cx - 1, cy - 48 + bob, 3, 7, accentColor);
+    p.rect(cx + 7, cy - 46 + bob, 3, 5, '#ffd740');
+    // Glowing fractured runic veins across torso
+    p.line(cx - 9, cy - 16, cx - 2, cy - 8, accentColor, 1);
+    p.line(cx + 9, cy - 16, cx + 2, cy - 8, accentColor, 1);
+    p.line(cx, cy - 20, cx, cy - 6, '#ffd740', 1);
+    p.sparkle(cx - 14, cy - 28 + bob, 2, '#ffffff', accentColor);
+    p.sparkle(cx + 14, cy - 28 + bob, 2, '#ffffff', '#ffd740');
   }
 
   // Telegraph shiny glint star on windup!

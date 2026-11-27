@@ -12,7 +12,7 @@ import {
   type HitEvent,
 } from '../physics';
 import { ComboEngine, type ComboDefinition, type ComboInput } from '../combos';
-import { generateGauntletRun, type BossInstance, type BossMove, type BossMoveStep } from '../bosses';
+import { generateGauntletRun, generateRaidBossInstance, type BossInstance, type BossMove, type BossMoveStep } from '../bosses';
 import {
   UPGRADE_SPECS,
   applyXpGain,
@@ -37,6 +37,7 @@ import type { ActiveBossAreaAttack } from '../render/bossAreaRenderer';
 import {
   generateRoadHealthPacks,
   generateRoadMinigames,
+  generateRoadRaidPortal,
   generateRoadTreasureChests,
   generateRoadVariation,
   rollRunBuffChoices,
@@ -44,6 +45,7 @@ import {
   type RoadGuardian,
   type RoadHealthPack,
   type RoadMinigameState,
+  type RoadRaidPortal,
   type RoadTreasureChest,
   type RoadVariation,
   type RunBuff,
@@ -54,9 +56,11 @@ import { getFightingStyle } from './fightingStyles';
 export type GameScreen =
   | 'title'
   | 'path'
+  | 'raid_prompt'
   | 'tale_of_tape'
   | 'combat'
   | 'victory_boss'
+  | 'victory_raid'
   | 'victory_run'
   | 'run_summary'
   | 'sanctuary';
@@ -159,6 +163,14 @@ export interface RunSummary {
   levelsGainedThisRun: number;
   outcome: 'in_progress' | 'defeat' | 'victory';
   lastBossReward?: { gold: number; xp: number; bossName: string };
+  lastRaidReward?: {
+    bossName: string;
+    gold: number;
+    xp: number;
+    skillPoints: number;
+    levelCapUpgraded: boolean;
+    newLevelCap: number;
+  };
 }
 
 export interface SoundHooks {
@@ -198,6 +210,9 @@ export class GameEngine {
   public roadGuardians: RoadGuardian[] = [];
   public roadHealthPacks: RoadHealthPack[] = [];
   public roadChests: RoadTreasureChest[] = [];
+  public roadRaidPortal: RoadRaidPortal | null = null;
+  public pendingRaidBoss: BossInstance | null = null;
+  public isRaidFight = false;
   public roadMinigames: RoadMinigameState[] = [];
   public activeRoadMinigame: RoadMinigameState | null = null;
   public minigameLaneCooldown = 0;
@@ -282,6 +297,9 @@ export class GameEngine {
       bossInst.stats.goldReward,
       bossInst.stats.xpReward
     );
+    this.roadRaidPortal = generateRoadRaidPortal(this.pathState.targetDistance, bossInst.template.tier);
+    this.pendingRaidBoss = this.roadRaidPortal ? generateRaidBossInstance(bossInst) : null;
+    this.isRaidFight = false;
     this.pathAttackCooldown = 0;
     this.pathDashTimer = 0;
     this.pathDashCooldown = 0;
@@ -475,9 +493,41 @@ export class GameEngine {
 
   public openTaleOfTape(): void {
     const bossInst = this.gauntlet[this.currentTierIndex];
+    this.isRaidFight = false;
     this.setupCombatEntities(bossInst, this.player?.hp);
     this.tapeTimer = 0;
     this.screen = 'tale_of_tape';
+    this.input.clearBuffers();
+    this.notifyUI();
+  }
+
+  public enterAreaRaid(): void {
+    if (!this.roadRaidPortal || !this.pendingRaidBoss) {
+      this.screen = 'path';
+      this.notifyUI();
+      return;
+    }
+    this.roadRaidPortal.entered = true;
+    this.isRaidFight = true;
+    this.setupCombatEntities(this.pendingRaidBoss, this.player?.hp);
+    this.beginBossFight();
+  }
+
+  public declineAreaRaid(): void {
+    if (this.roadRaidPortal) {
+      this.roadRaidPortal.declined = true;
+    }
+    this.isRaidFight = false;
+    this.screen = 'path';
+    this.input.clearBuffers();
+    this.notifyUI();
+  }
+
+  public returnFromRaidToRoad(): void {
+    this.isRaidFight = false;
+    this.healPlayer(Math.round(this.player.maxHp * 0.35));
+    this.player.stamina = this.player.maxStamina;
+    this.screen = 'path';
     this.input.clearBuffers();
     this.notifyUI();
   }
@@ -1050,6 +1100,22 @@ export class GameEngine {
       }
     }
 
+    // Optional 25%-chance Area Raid Rift encounter when player walks near it!
+    if (
+      this.roadRaidPortal &&
+      !this.roadRaidPortal.entered &&
+      !this.roadRaidPortal.declined &&
+      !this.roadRaidPortal.cleared &&
+      Math.abs(this.roadRaidPortal.distance - this.pathState.distance) < 86 &&
+      Math.abs(this.roadRaidPortal.x - this.pathState.playerX) < 118
+    ) {
+      this.screen = 'raid_prompt';
+      this.input.clearBuffers();
+      this.sound.playBossTelegraph();
+      this.notifyUI();
+      return;
+    }
+
     // Pressing Space/Enter fast-forwards ONLY once all road guardians & minigames are cleared!
     const allCleared =
       this.roadGuardians.every((g) => g.state === 'dead') &&
@@ -1275,7 +1341,10 @@ export class GameEngine {
 
       if (this.bossDefeatTimer <= 0) {
         this.bossDefeatTimer = 0;
-        if (this.currentTierIndex >= this.gauntlet.length - 1) {
+        if (this.isRaidFight) {
+          this.pendingBuffChoices = [];
+          this.screen = 'victory_raid';
+        } else if (this.currentTierIndex >= this.gauntlet.length - 1) {
           this.pendingBuffChoices = [];
           this.runSummary.outcome = 'victory';
           this.screen = 'victory_run';
@@ -2344,11 +2413,32 @@ export class GameEngine {
     const awardedGold = this.awardGold(gold, 640, 290);
     const awardedXp = this.awardXp(xp, 640, 326);
     this.progress.totalBossesDefeated += 1;
-    this.progress.highestTierCleared = Math.max(this.progress.highestTierCleared, inst.template.tier);
+
+    if (this.isRaidFight) {
+      // Area Raid Victory: Guaranteed +2 Level Points & 5% chance for permanent +5 Level Cap Upgrade!
+      this.progress.skillPoints += 2;
+      const levelCapUpgraded = Math.random() < 0.05;
+      if (levelCapUpgraded) {
+        this.progress.levelCap = (this.progress.levelCap ?? 25) + 5;
+      }
+      if (this.roadRaidPortal) {
+        this.roadRaidPortal.cleared = true;
+      }
+      this.runSummary.lastRaidReward = {
+        bossName: inst.template.name,
+        gold: awardedGold,
+        xp: awardedXp,
+        skillPoints: 2,
+        levelCapUpgraded,
+        newLevelCap: this.progress.levelCap,
+      };
+    } else {
+      this.progress.highestTierCleared = Math.max(this.progress.highestTierCleared, inst.template.tier);
+      this.runSummary.lastBossReward = { gold: awardedGold, xp: awardedXp, bossName: inst.template.name };
+    }
     saveProgress(this.progress);
 
     this.runSummary.bossesDefeatedThisRun += 1;
-    this.runSummary.lastBossReward = { gold: awardedGold, xp: awardedXp, bossName: inst.template.name };
 
     this.sound.playHit(true, true);
     this.bossAnim.play('defeated', true, 2.25);
@@ -2592,6 +2682,7 @@ export class GameEngine {
 
   private handlePlayerDeath(): void {
     this.player.state = 'dead';
+    this.isRaidFight = false;
     this.physics.clearHitboxesForOwner('player');
     this.physics.clearHitboxesForOwner('boss');
 

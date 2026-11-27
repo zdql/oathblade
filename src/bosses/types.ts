@@ -177,4 +177,5 @@ export interface BossInstance {
   traits: BossTrait[];
   stats: RolledBossStats;
   seed: number;
+  isRaidBoss?: boolean;
 }

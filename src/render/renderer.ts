@@ -78,9 +78,14 @@ export class GameRenderer {
     const activeBoss = engine.gauntlet[engine.currentTierIndex] ?? engine.gauntlet[0];
     const biome = activeBoss.template.biome;
 
-    if (engine.screen === 'path') {
+    if (engine.screen === 'path' || engine.screen === 'raid_prompt') {
       this.renderOverworldPath(engine, biome);
-    } else if (engine.screen === 'combat' || engine.screen === 'victory_boss' || engine.screen === 'tale_of_tape') {
+    } else if (
+      engine.screen === 'combat' ||
+      engine.screen === 'victory_boss' ||
+      engine.screen === 'victory_raid' ||
+      engine.screen === 'tale_of_tape'
+    ) {
       this.renderCombatArena(engine, biome);
     } else {
       drawBiomeBackdrop(
@@ -273,6 +278,17 @@ export class GameRenderer {
     ctx.fillRect(-38, -110, 76, 95);
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    // Render Optional 25%-chance Area Raid Rift Portal!
+    const rp = engine.roadRaidPortal;
+    if (rp && !rp.cleared && rp.distance > ps.distance - 30 && rp.distance < ps.distance + 470) {
+      const rel = Math.max(0, Math.min(1, (rp.distance - ps.distance) / 470));
+      const depth = 1 - rel;
+      const ry = 310 + Math.pow(depth, 1.35) * 235;
+      const rxPortal = roadCenterAt(depth) + rp.x * (0.55 + depth * 0.55);
+      const rScale = 0.62 + depth * 0.8;
+      drawRaidPortalSprite(ctx, rxPortal, ry, rScale, this.clock, rp.declined);
+    }
 
     // Render Mini-Boss Guarded Treasure Chests!
     const visibleChests = engine.roadChests.filter(
@@ -562,6 +578,19 @@ export class GameRenderer {
     const bProj = this.projectArena(engine.bossBody.pos.x, engine.bossBody.pos.y);
 
     // Classic Pokémon-style Battle Terrain Platforms beneath both combatants!
+    if (engine.isRaidFight) {
+      // Abyssal Raid Rift Atmosphere & Pulsing Runic Boss Sigil Circle
+      ctx.save();
+      ctx.fillStyle = 'rgba(42, 8, 66, 0.24)';
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.strokeStyle = engine.boss.instance.template.palette.accent;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.55 + Math.sin(this.clock * 5) * 0.2;
+      ctx.beginPath();
+      ctx.ellipse(bProj.sx, bProj.sy + 8 * bProj.scale, 138 * bProj.scale, 42 * bProj.scale, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     drawBattlePlatform(ctx, biome, bProj.sx, bProj.sy + 6 * bProj.scale, 108 * bProj.scale, 32 * bProj.scale);
     drawBattlePlatform(ctx, biome, pProj.sx, pProj.sy + 6 * pProj.scale, 68 * pProj.scale, 22 * pProj.scale);
 
@@ -610,6 +639,7 @@ export class GameRenderer {
               isShielding: engine.boss.isShielding,
               flashHit: engine.boss.flashTimer > 0,
               accentColor: engine.boss.instance.template.palette.accent,
+              isRaidBoss: Boolean(engine.boss.instance.isRaidBoss),
             }
           );
           if (engine.boss.state === 'staggered') {
@@ -783,19 +813,24 @@ export class GameRenderer {
     // ---- TOP: POKÉMON-INSPIRED BOSS BATTLE PLATE ----
     const barW = 540;
     const barX = this.width * 0.5 - barW * 0.5;
-    ctx.fillStyle = 'rgba(14, 16, 24, 0.88)';
+    ctx.fillStyle = engine.isRaidFight ? 'rgba(24, 10, 38, 0.92)' : 'rgba(14, 16, 24, 0.88)';
     ctx.beginPath();
     ctx.roundRect(barX - 18, 14, barW + 36, 78, 10);
     ctx.fill();
-    ctx.strokeStyle = '#ffd54f';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = engine.isRaidFight ? '#e040fb' : '#ffd54f';
+    ctx.lineWidth = engine.isRaidFight ? 2.6 : 2;
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 17px Georgia, serif';
     ctx.textAlign = 'left';
     const traitStr = b.instance.traits.map((t) => t.name).join(' • ');
-    ctx.fillText(`Lv.${b.instance.template.tier * 15}  ${b.instance.template.name}, ${b.instance.template.title}`, barX, 36);
+    const raidPrefix = engine.isRaidFight ? '★ RAID  ' : '';
+    ctx.fillText(
+      `${raidPrefix}Lv.${b.instance.template.tier * 15}  ${b.instance.template.name}, ${b.instance.template.title}`,
+      barX,
+      36
+    );
 
     ctx.fillStyle = '#ffd54f';
     ctx.font = '600 12px system-ui, sans-serif';
@@ -1476,5 +1511,58 @@ function drawTreasureChestSprite(
     ctx.fillStyle = '#ffea00';
     ctx.fillText('★ OPEN CHEST! ★', x, y - 40 * scale + Math.sin(time * 8) * 3);
   }
+  ctx.restore();
+}
+
+function drawRaidPortalSprite(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  time: number,
+  declined: boolean
+): void {
+  ctx.save();
+  ctx.globalAlpha = declined ? 0.45 : 1;
+  // Ground shadow
+  ctx.fillStyle = 'rgba(18, 0, 36, 0.55)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 6 * scale, 32 * scale, 10 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const cy = y - 34 * scale;
+  const r = (24 + Math.sin(time * 6) * 2.5) * scale;
+
+  // Swirling outer violet rift ring
+  ctx.fillStyle = 'rgba(213, 0, 249, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(x, cy, r * 1.15, r * 1.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#e040fb';
+  ctx.lineWidth = 3 * scale;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, r, r * 1.3, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Dark abyssal vortex core
+  ctx.fillStyle = '#120520';
+  ctx.beginPath();
+  ctx.ellipse(x, cy, r * 0.68, r * 0.94, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Orbiting runic sparks
+  for (let i = 0; i < 4; i++) {
+    const a = time * 4.8 + (i * Math.PI) / 2;
+    const sx = x + Math.cos(a) * r * 0.95;
+    const sy = cy + Math.sin(a) * r * 1.25;
+    ctx.fillStyle = i % 2 === 0 ? '#ffd740' : '#00e5ff';
+    ctx.fillRect(sx - 3 * scale, sy - 3 * scale, 6 * scale, 6 * scale);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = `900 ${Math.max(10, Math.round(12 * scale))}px system-ui, sans-serif`;
+  ctx.fillStyle = '#ea80fc';
+  ctx.fillText(declined ? 'RAID RIFT (PASSED)' : '⚡ OPTIONAL AREA RAID ⚡', x, cy - r * 1.55);
   ctx.restore();
 }

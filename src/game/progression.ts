@@ -342,6 +342,7 @@ export interface PlayerProgress {
   gold: number;
   xp: number;
   level: number;
+  levelCap: number;
   skillPoints: number;
   runCount: number;
   highestTierCleared: number;
@@ -360,23 +361,30 @@ export function getXpForNextLevel(level: number): number {
   return Math.round(120 * Math.pow(1.26, lv - 1) + (lv - 1) * 35);
 }
 
-/** Applies XP to PlayerProgress, advancing levels and granting 1 Upgrade Point per level earned. */
+/** Applies XP to PlayerProgress, advancing levels up to `levelCap` and granting 1 Upgrade Point per level earned. */
 export function applyXpGain(
   progress: PlayerProgress,
   amount: number
 ): { leveledUp: boolean; levelsGained: number; newLevel: number } {
-  if (amount <= 0) {
+  const cap = Math.max(1, progress.levelCap ?? 25);
+  if (amount <= 0 || progress.level >= cap) {
+    if (progress.level >= cap) {
+      progress.xp = Math.min(progress.xp, getXpForNextLevel(progress.level) - 1);
+    }
     return { leveledUp: false, levelsGained: 0, newLevel: progress.level };
   }
   progress.xp += amount;
   let levelsGained = 0;
   let needed = getXpForNextLevel(progress.level);
-  while (progress.xp >= needed) {
+  while (progress.xp >= needed && progress.level < cap) {
     progress.xp -= needed;
     progress.level += 1;
     progress.skillPoints += 1;
     levelsGained += 1;
     needed = getXpForNextLevel(progress.level);
+  }
+  if (progress.level >= cap) {
+    progress.xp = Math.min(progress.xp, getXpForNextLevel(progress.level) - 1);
   }
   return {
     leveledUp: levelsGained > 0,
@@ -415,6 +423,7 @@ export function createDefaultProgress(): PlayerProgress {
     gold: 0,
     xp: 0,
     level: 1,
+    levelCap: 25,
     skillPoints: 0,
     runCount: 1,
     highestTierCleared: 0,
@@ -591,6 +600,7 @@ export function loadProgress(): PlayerProgress {
       ...def,
       ...parsed,
       level: typeof parsed.level === 'number' && parsed.level >= 1 ? Math.floor(parsed.level) : 1,
+      levelCap: typeof parsed.levelCap === 'number' && parsed.levelCap >= 25 ? Math.floor(parsed.levelCap) : 25,
       skillPoints: typeof parsed.skillPoints === 'number' && parsed.skillPoints >= 0 ? Math.floor(parsed.skillPoints) : 0,
       upgrades: {
         ...def.upgrades,

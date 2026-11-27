@@ -193,6 +193,30 @@ export function generateRoadTreasureChests(
   return chests;
 }
 
+export interface RoadRaidPortal {
+  id: string;
+  distance: number;
+  x: number;
+  entered: boolean;
+  declined: boolean;
+  cleared: boolean;
+}
+
+/**
+ * 25% chance per road area to spawn an optional Abyssal Raid Rift.
+ */
+export function generateRoadRaidPortal(targetDistance: number, tier: number): RoadRaidPortal | null {
+  if (Math.random() >= 0.25) return null;
+  return {
+    id: `raid_portal_t${tier}_${Math.random().toString(36).slice(2, 6)}`,
+    distance: Math.round(targetDistance * (0.58 + Math.random() * 0.16)),
+    x: (Math.random() < 0.5 ? -1 : 1) * 118,
+    entered: false,
+    declined: false,
+    cleared: false,
+  };
+}
+
 export function generateRoadHealthPacks(targetDistance: number): RoadHealthPack[] {
   const packs: RoadHealthPack[] = [];
   // Sporadic placement across 4 road segments (45% chance per segment -> 1-3 packs, never too easy!)

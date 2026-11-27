@@ -60,10 +60,14 @@ export class UIOverlay {
 
     if (e.screen === 'title') {
       html += this.renderTitleScreen();
+    } else if (e.screen === 'raid_prompt') {
+      html += this.renderRaidPrompt();
     } else if (e.screen === 'tale_of_tape') {
       html += this.renderTaleOfTape();
     } else if (e.screen === 'victory_boss') {
       html += this.renderBossVictory();
+    } else if (e.screen === 'victory_raid') {
+      html += this.renderRaidVictory();
     } else if (e.screen === 'victory_run' || e.screen === 'run_summary') {
       html += this.renderRunSummary(e.screen === 'victory_run');
     } else if (e.screen === 'sanctuary') {
@@ -158,6 +162,105 @@ export class UIOverlay {
           <div class="btn-row">
             <button class="btn btn-primary" data-action="start-run">Embark on the Trail</button>
             <button class="btn btn-secondary" data-action="open-sanctuary">Sanctuary Forge &amp; Combos</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRaidPrompt(): string {
+    const rb = this.engine.pendingRaidBoss;
+    if (!rb) return '';
+    const portraitUrl = renderBossPortraitDataUrl(rb.template.visualId, rb.template.palette.accent, true);
+    return `
+      <div class="overlay-screen">
+        <div class="card" style="max-width:720px;border-color:#e040fb;box-shadow:0 0 40px rgba(213,0,249,0.28);">
+          <div class="tape-header" style="align-items:center;gap:16px;">
+            <div style="display:flex;align-items:center;gap:14px;">
+              ${
+                portraitUrl
+                  ? `<img src="${portraitUrl}" alt="${rb.template.name}" style="width:94px;height:94px;image-rendering:pixelated;background:rgba(24,8,40,0.75);border:2px solid #e040fb;border-radius:10px;padding:4px;" />`
+                  : ''
+              }
+              <div>
+                <div class="tape-tier" style="color:#ea80fc;">⚡ Optional Area Raid Rift (Tier ${rb.template.tier}) ⚡</div>
+                <div class="tape-name">${rb.template.name}, ${rb.template.title}</div>
+              </div>
+            </div>
+          </div>
+
+          <p style="color:#e2e8f0;font-size:14px;margin-bottom:6px;">
+            <strong>Custom Raid Abilities:</strong> Rift Cataclysm, Void Severance &amp; Sovereign's Decree
+          </p>
+          <p style="color:#94a3b8;font-size:13px;font-style:italic;margin-bottom:12px;">
+            "${rb.template.lore}"
+          </p>
+
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-label">Raid Vitality</div>
+              <div class="stat-val" style="color:#ea80fc;">${rb.stats.maxHp}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Attack Power</div>
+              <div class="stat-val" style="color:#ff8a80;">${rb.stats.attackDamage}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Guaranteed</div>
+              <div class="stat-val" style="color:#69f0ae;">+2 LVL Pts</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Rare 5% Drop</div>
+              <div class="stat-val" style="color:#ffd740;">+5 Lvl Cap</div>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" style="background:linear-gradient(135deg,#e040fb,#7c4dff);color:#fff;" data-action="enter-raid">Enter Area Raid</button>
+            <button class="btn btn-secondary" data-action="decline-raid">Pass By &amp; Continue Trail</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRaidVictory(): string {
+    const r = this.engine.runSummary.lastRaidReward;
+    return `
+      <div class="overlay-screen">
+        <div class="card run-summary-card" style="text-align:center;max-width:680px;border-color:#e040fb;">
+          <div class="tape-tier" style="color:#ea80fc;">⚡ Area Raid Conquered! ⚡</div>
+          <div class="title-logo" style="font-size:34px;margin:6px 0;">${r?.bossName ?? 'Raid Sovereign'} Vanquished</div>
+
+          <div class="reward-showcase" style="margin:14px 0;">
+            <div class="reward-pill" style="border-color:#69f0ae;background:rgba(105,240,174,0.12);">
+              <div class="reward-label">Guaranteed Raid Reward</div>
+              <div class="reward-value" style="color:#69f0ae;">+${r?.skillPoints ?? 2} LVL Pts</div>
+              <div class="reward-total">Available: ${this.engine.progress.skillPoints} LVL Pts</div>
+            </div>
+            <div class="reward-pill reward-gold">
+              <div class="reward-label">Raid Bounty</div>
+              <div class="reward-value currency-gold">+${r?.gold ?? 0}g</div>
+              <div class="reward-total"><span class="currency-xp">+${r?.xp ?? 0} XP</span></div>
+            </div>
+          </div>
+
+          ${
+            r?.levelCapUpgraded
+              ? `<div style="margin:12px 0;padding:12px 16px;border-radius:10px;border:2px solid #ffd740;background:rgba(255,215,64,0.16);color:#ffd740;font-weight:900;font-size:15px;">
+                  ★ RARE 5% DROP! LEVEL CAP UPGRADED (+5) — NEW MAX LEVEL: Lv.${r.newLevelCap} ★
+                </div>`
+              : `<div style="margin:8px 0;font-size:12px;color:#94a3b8;">
+                  Current Level Cap: Lv.${this.engine.progress.levelCap} (5% chance per Raid to raise by +5)
+                </div>`
+          }
+
+          <p style="color:#cbd5e1;font-size:13px;margin:10px 0;">
+            The Rift collapses behind you, restoring 35% Vitality before returning to the trail.
+          </p>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" data-action="return-from-raid">Return to Trail</button>
           </div>
         </div>
       </div>
@@ -562,7 +665,7 @@ export class UIOverlay {
             </div>
             <div class="currency-bar" style="align-items:center;flex-wrap:wrap;justify-content:flex-end;">
               <span class="currency-gold">Gold: ${p.gold}g</span>
-              <span class="currency-xp">Lv.${p.level} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span>
+              <span class="currency-xp">Lv.${p.level}/${p.levelCap} (${p.xp}/${getXpForNextLevel(p.level)} XP)</span>
               <span style="background:${p.skillPoints > 0 ? 'rgba(105,240,174,0.18)' : 'rgba(255,255,255,0.08)'};border:1px solid ${p.skillPoints > 0 ? '#69f0ae' : 'rgba(255,255,255,0.16)'};color:${p.skillPoints > 0 ? '#69f0ae' : '#94a3b8'};padding:4px 10px;border-radius:999px;font-size:13px;">
                 LVL Pts: ${p.skillPoints}
               </span>
@@ -616,6 +719,9 @@ export class UIOverlay {
         if (act === 'start-run') this.engine.startNewRun();
         else if (act === 'open-sanctuary') this.engine.openSanctuary();
         else if (act === 'begin-fight') this.engine.beginBossFight();
+        else if (act === 'enter-raid') this.engine.enterAreaRaid();
+        else if (act === 'decline-raid') this.engine.declineAreaRaid();
+        else if (act === 'return-from-raid') this.engine.returnFromRaidToRoad();
         else if (act === 'next-boss') this.engine.continuePathToNextBoss();
         else if (act === 'toggle-mute') {
           this.sound.muted = !this.sound.muted;
