@@ -490,10 +490,12 @@ export class GameRenderer {
     ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = engine.arcadeMode ? '#80deea' : '#ffd54f';
+    ctx.fillStyle = engine.arcadeMode ? (engine.portalTimer <= 8 ? '#ff5252' : '#80deea') : '#ffd54f';
     ctx.font = '800 13px system-ui, sans-serif';
-    const modeTag = engine.arcadeMode ? 'MINIGAME PORTAL (JUST FOR FUN)' : 'ROADSIDE MINIGAME';
-    ctx.fillText(`${modeTag}  •  TIME: ${Math.max(0, mg.maxTimer - mg.timer).toFixed(1)}s`, cx, cy - 104);
+    const modeTag = engine.arcadeMode
+      ? `PORTAL CLOSES IN ${engine.portalTimer.toFixed(1)}s`
+      : 'ROADSIDE MINIGAME';
+    ctx.fillText(`${modeTag}  •  GAME TIME: ${Math.max(0, mg.maxTimer - mg.timer).toFixed(1)}s`, cx, cy - 104);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 24px Georgia, serif';

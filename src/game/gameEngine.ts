@@ -224,6 +224,7 @@ export class GameEngine {
   public roadMinigames: RoadMinigameState[] = [];
   public activeRoadMinigame: RoadMinigameState | null = null;
   public arcadeMode = false;
+  public portalTimer = 0;
   public arcadeResult: {
     kind: RoadMinigameKind;
     title: string;
@@ -597,6 +598,7 @@ export class GameEngine {
     this.arcadeMode = false;
     this.arcadeResult = null;
     this.activeRoadMinigame = null;
+    this.portalTimer = 60;
     this.screen = 'minigame_portal';
     this.input.clearBuffers();
     this.sound.playBossTelegraph();
@@ -604,6 +606,7 @@ export class GameEngine {
   }
 
   public startPracticeMinigame(kind: RoadMinigameKind): void {
+    if (this.portalTimer <= 0) return;
     const mg = createMinigameOfKind(kind, 0, true);
     mg.active = true;
     this.arcadeMode = true;
@@ -738,13 +741,32 @@ export class GameEngine {
 
     if (this.screen === 'path') {
       this.updatePath(dt);
-    } else if (this.screen === 'minigame_arcade') {
-      if (this.input.consumeAction('escape')) {
-        this.exitPracticeMinigame();
-        return;
+    } else if (this.screen === 'minigame_portal' || this.screen === 'minigame_arcade') {
+      if (this.portalTimer > 0) {
+        this.portalTimer = Math.max(0, this.portalTimer - dt);
+        if (typeof document !== 'undefined') {
+          const el = document.getElementById('portal-timer-val');
+          if (el) el.textContent = `${this.portalTimer.toFixed(1)}s`;
+        }
+        if (this.portalTimer === 0) {
+          // 30-second portal rule reached: collapse out of any active minigame!
+          this.arcadeMode = false;
+          this.arcadeResult = null;
+          this.activeRoadMinigame = null;
+          this.screen = 'minigame_portal';
+          this.sound.playBossTelegraph();
+          this.notifyUI();
+          return;
+        }
       }
-      if (this.activeRoadMinigame && this.activeRoadMinigame.active) {
-        this.updateRoadMinigame(dt);
+      if (this.screen === 'minigame_arcade') {
+        if (this.input.consumeAction('escape')) {
+          this.exitPracticeMinigame();
+          return;
+        }
+        if (this.activeRoadMinigame && this.activeRoadMinigame.active) {
+          this.updateRoadMinigame(dt);
+        }
       }
     } else if (this.screen === 'tale_of_tape') {
       this.tapeTimer += dt;

@@ -513,35 +513,50 @@ export class UIOverlay {
 
   private renderMinigamePortal(): string {
     const nextBoss = this.engine.gauntlet[this.engine.currentTierIndex + 1];
+    const expired = this.engine.portalTimer <= 0;
     return `
       <div class="overlay-screen">
-        <div class="card sanctuary-card" style="border-color:#00e5ff;box-shadow:0 0 38px rgba(0,229,255,0.22);">
+        <div class="card sanctuary-card" style="border-color:${expired ? '#ff5252' : '#00e5ff'};box-shadow:0 0 38px rgba(0,229,255,0.22);">
           <div class="sanctuary-top">
             <div>
-              <div class="tape-tier" style="color:#80deea;">🌀 Post-Boss Bonus Portal • Just For Fun</div>
-              <div style="font-family:Georgia,serif;font-size:24px;color:#fff;">Minigame Portal (${ALL_MINIGAME_KINDS.length} Extended Games)</div>
+              <div class="tape-tier" style="color:${expired ? '#ff8a80' : '#80deea'};">🌀 Post-Boss Bonus Portal • 1-Minute Time Limit • Just For Fun</div>
+              <div style="font-family:Georgia,serif;font-size:24px;color:#fff;">
+                ${expired ? 'Minigame Portal Collapsed!' : `Minigame Portal (${ALL_MINIGAME_KINDS.length} Extended Games)`}
+              </div>
             </div>
-            <div style="font-size:12px;color:#94a3b8;text-align:right;">
-              No rewards — pure fun!<br/>When done, move on or return to the Forge.
+            <div style="text-align:right;">
+              <div style="display:inline-block;padding:5px 12px;border-radius:999px;font-weight:900;font-size:14px;border:1.5px solid ${expired ? '#ff5252' : '#00e5ff'};background:${expired ? 'rgba(255,82,82,0.18)' : 'rgba(0,229,255,0.14)'};color:${expired ? '#ff8a80' : '#80deea'};">
+                ${expired ? 'TIME UP (0.0s)' : `Portal: <span id="portal-timer-val">${this.engine.portalTimer.toFixed(1)}s</span>`}
+              </div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:4px;">No rewards — 1-minute max stay</div>
             </div>
           </div>
 
-          <div class="shop-scroll">
-            <div class="shop-grid">
-              ${ALL_MINIGAME_KINDS.map((kind) => {
-                const sample = createMinigameOfKind(kind, 0, true);
-                return `
-                  <div class="shop-item" style="border-color:rgba(0,229,255,0.3);">
-                    <div>
-                      <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">${Math.round(sample.maxTimer)}s • Fun</span></h4>
-                      <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
-                    </div>
-                    <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
+          ${
+            expired
+              ? `<div style="margin:12px 0;padding:16px;border-radius:10px;background:rgba(255,82,82,0.12);border:1px solid rgba(255,82,82,0.4);color:#ffcdd2;font-size:14px;text-align:center;">
+                  <strong>The 1-minute portal window has closed!</strong><br/>
+                  Choose below to either <strong>Go Back to Sanctuary Forge</strong> or <strong>Move On</strong> to the next stage.
+                </div>`
+              : `
+                <div class="shop-scroll">
+                  <div class="shop-grid">
+                    ${ALL_MINIGAME_KINDS.map((kind) => {
+                      const sample = createMinigameOfKind(kind, 0, true);
+                      return `
+                        <div class="shop-item" style="border-color:rgba(0,229,255,0.3);">
+                          <div>
+                            <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">${Math.round(sample.maxTimer)}s • Fun</span></h4>
+                            <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
+                          </div>
+                          <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
+                        </div>
+                      `;
+                    }).join('')}
                   </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
+                </div>
+              `
+          }
 
           <div class="btn-row" style="justify-content:space-between;margin-top:14px;">
             <button class="btn btn-secondary" data-action="open-sanctuary">Go Back to Sanctuary Forge</button>
@@ -571,7 +586,7 @@ export class UIOverlay {
             Free-Play Mode — No Gold, XP, or HP rewards (just for fun!).
           </p>
           <div class="btn-row">
-            <button class="btn btn-primary" data-play-arcade="${res.kind}">Play Again</button>
+            <button class="btn btn-primary" data-play-arcade="${res.kind}" ${this.engine.portalTimer <= 0 ? 'disabled' : ''}>Play Again</button>
             <button class="btn btn-secondary" data-action="exit-arcade">Back to Minigame Portal</button>
           </div>
         </div>
