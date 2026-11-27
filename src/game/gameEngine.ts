@@ -18,11 +18,13 @@ import {
   applyXpGain,
   computePlayerStats,
   getComboLevelMultiplier,
+  isEverythingMaxed,
   loadProgress,
   saveProgress,
   type DerivedPlayerStats,
   type PlayerProgress,
 } from './progression';
+import { getActiveSwordPalette } from '../render/playerPixelSprite';
 import { EffectsManager } from './effects';
 import { InputManager } from './input';
 import {
@@ -1794,6 +1796,11 @@ export class GameEngine {
     );
 
     const styleSpec = getFightingStyle(this.progress.activeStyleId);
+    const swordPal = getActiveSwordPalette(
+      this.progress.upgrades,
+      this.progress.activeStyleId,
+      isEverythingMaxed(this.progress)
+    );
     this.effects.spawnSlash(
       this.playerBody.pos.x + dir.x * 34,
       this.playerBody.pos.y + dir.y * 34,
@@ -1801,13 +1808,15 @@ export class GameEngine {
       isStrong ? 72 : 56,
       angle - (isStrong ? 1.15 : 0.85) * p.swingDir,
       angle + (isStrong ? 1.15 : 0.85) * p.swingDir,
-      styleSpec.primaryColor,
+      swordPal.edgeColor,
       isStrong ? 15 : 10,
-      0.19
+      0.22
     );
-    // Bespoke Fighting Style visual effect on every strike!
+    // Bespoke Fighting Style & Sword-Color visual effect on every strike!
     const styleVfx =
-      styleSpec.id === 'berserker'
+      swordPal.theme === 'inferno'
+        ? 'heavy_cleave'
+        : styleSpec.id === 'berserker'
         ? 'heavy_cleave'
         : styleSpec.id === 'gale'
         ? 'dodge_afterimage'
@@ -1825,18 +1834,18 @@ export class GameEngine {
       this.playerBody.pos.x + dir.x * 44,
       this.playerBody.pos.y + dir.y * 44,
       24,
-      styleSpec.primaryColor,
-      isStrong ? 1.2 : 0.95,
+      swordPal.bladeColor,
+      isStrong ? 1.25 : 1.0,
       p.swingDir < 0
     );
     this.effects.spawnBurst(
       this.playerBody.pos.x + dir.x * 36,
       this.playerBody.pos.y + dir.y * 36,
       22,
-      styleSpec.primaryColor,
-      isStrong ? 8 : 5,
-      210,
-      4
+      swordPal.edgeColor,
+      isStrong ? 10 : 6,
+      220,
+      swordPal.theme === 'inferno' ? 5 : 4
     );
     if (p.counterWindowTimer > 0) p.counterWindowTimer = 0;
   }

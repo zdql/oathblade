@@ -718,6 +718,29 @@ export class GameRenderer {
     drawList.sort((a, b) => a.y - b.y);
     for (const item of drawList) item.draw();
 
+    // Glowing Sword-Color Tapered Slash Arcs in the Arena!
+    for (const sl of engine.effects.slashes) {
+      const proj = this.projectArena(sl.x, sl.y);
+      const t = sl.life / Math.max(0.01, sl.maxLife);
+      const r = sl.radius * proj.scale;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, t * 1.35);
+      ctx.lineCap = 'round';
+      // Outer color-glow arc
+      ctx.strokeStyle = sl.color;
+      ctx.lineWidth = sl.width * proj.scale * t;
+      ctx.beginPath();
+      ctx.arc(proj.sx, proj.sy - sl.z * proj.scale, r, sl.startAngle, sl.endAngle, sl.endAngle < sl.startAngle);
+      ctx.stroke();
+      // Bright white razor core
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(2, sl.width * 0.35 * proj.scale * t);
+      ctx.beginPath();
+      ctx.arc(proj.sx, proj.sy - sl.z * proj.scale, r, sl.startAngle, sl.endAngle, sl.endAngle < sl.startAngle);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Multi-frame Pixel VFX Sprites (12–22 frames per event!)
     engine.vfx.render(ctx, (wx, wy) => this.projectArena(wx, wy));
 

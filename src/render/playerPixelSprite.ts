@@ -17,6 +17,64 @@ export interface PlayerSpriteDrawParams {
   allMaxed?: boolean;
 }
 
+export type SwordColorTheme =
+  | 'steel'
+  | 'gold'
+  | 'frost'
+  | 'crimson'
+  | 'violet'
+  | 'emerald'
+  | 'inferno';
+
+export interface SwordPalette {
+  bladeColor: string;
+  trailColor: string;
+  edgeColor: string;
+  theme: SwordColorTheme;
+}
+
+/**
+ * Resolves the player's current sword color & custom swing-effect theme
+ * from their Blade upgrade rank, active Fighting Style, and All-Maxed status.
+ */
+export function getActiveSwordPalette(
+  upgrades?: Record<UpgradeId, number>,
+  styleId?: FightingStyleId,
+  allMaxed = false
+): SwordPalette {
+  if (allMaxed) {
+    return { bladeColor: '#ff6d00', trailColor: '#ffab00', edgeColor: '#ff1744', theme: 'inferno' };
+  }
+  const styleSpec = getFightingStyle(styleId ?? 'balanced');
+  const uBlade = upgrades?.blade ?? 0;
+
+  if (styleId && styleId !== 'balanced') {
+    if (styleId === 'berserker') {
+      return { bladeColor: styleSpec.primaryColor, trailColor: '#ff5252', edgeColor: '#ff1744', theme: 'crimson' };
+    }
+    if (styleId === 'gale') {
+      return { bladeColor: styleSpec.primaryColor, trailColor: '#80deea', edgeColor: '#00e5ff', theme: 'frost' };
+    }
+    if (styleId === 'bastion') {
+      return { bladeColor: styleSpec.primaryColor, trailColor: '#fff59d', edgeColor: '#ffd54f', theme: 'gold' };
+    }
+    if (styleId === 'colossus') {
+      return { bladeColor: styleSpec.primaryColor, trailColor: '#a5d6a7', edgeColor: '#69f0ae', theme: 'emerald' };
+    }
+    if (styleId === 'phantom') {
+      return { bladeColor: styleSpec.primaryColor, trailColor: '#ea80fc', edgeColor: '#d500f9', theme: 'violet' };
+    }
+  }
+
+  if (uBlade >= 6) {
+    return { bladeColor: '#b3e5fc', trailColor: '#e0f7fa', edgeColor: '#29b6f6', theme: 'frost' };
+  }
+  if (uBlade >= 3) {
+    return { bladeColor: '#fff59d', trailColor: '#ffe082', edgeColor: '#ffb300', theme: 'gold' };
+  }
+  return { bladeColor: '#cfd8dc', trailColor: '#eceff1', edgeColor: '#90a4ae', theme: 'steel' };
+}
+
 const playerBuf = new PixelCanvas(64, 64);
 
 /**
@@ -66,7 +124,8 @@ export function renderPlayerPixelSprite(
   const STEEL_HI = '#ffffff';
   const STEEL_MID = uPoise >= 3 ? '#ffd54f' : '#cfd8dc';
   const STEEL_SH = uPoise >= 3 ? '#8d6e3f' : '#78909c';
-  const BLADE_GLOW = accentColor ?? styleSpec.primaryColor;
+  const swordPalette = getActiveSwordPalette(upgrades, styleId, Boolean(allMaxed));
+  const BLADE_GLOW = accentColor ?? swordPalette.edgeColor;
 
   // Per-frame kinematic pose values
   let bodyX = 32;
@@ -439,20 +498,68 @@ export function renderPlayerPixelSprite(
   const tipY = swordY - Math.cos(swordAngle) * bladeLen;
 
   if (drawSmear) {
-    const prevAngle = swordAngle + 0.7 * swingDir;
+    const prevAngle = swordAngle + 0.72 * swingDir;
     const prevTipX = swordX + Math.sin(prevAngle) * bladeLen;
     const prevTipY = swordY - Math.cos(prevAngle) * bladeLen;
+    const midTipX = (tipX + prevTipX) * 0.5 + 3 * swingDir;
+    const midTipY = (tipY + prevTipY) * 0.5 - 3;
+
     p.poly(
       [
         [swordX, swordY],
         [prevTipX, prevTipY],
-        [(tipX + prevTipX) * 0.5 + 3, (tipY + prevTipY) * 0.5 - 3],
+        [midTipX, midTipY],
         [tipX, tipY],
       ],
-      allMaxed ? '#ff6d00' : smearColor,
-      allMaxed ? '#ff1744' : BLADE_GLOW,
-      '#fff59d'
+      swordPalette.trailColor,
+      swordPalette.edgeColor,
+      '#ffffff'
     );
+
+    // Custom sword-color swing effects along the blade arc!
+    const theme = swordPalette.theme;
+    if (theme === 'inferno') {
+      // Roaring flame tongues & embers trailing behind the fiery blade
+      for (let k = 0; k < 4; k++) {
+        const u = k / 3;
+        const fx = prevTipX + (tipX - prevTipX) * u;
+        const fy = prevTipY + (tipY - prevTipY) * u;
+        p.rect(Math.round(fx) - 2, Math.round(fy) - 3 - (frame % 3), 4, 4, k % 2 === 0 ? '#ff1744' : '#ffab00');
+        p.px(Math.round(fx), Math.round(fy) - 5, '#fff59d');
+      }
+    } else if (theme === 'frost') {
+      // Crystalline ice shards & frost glints along the cyan sweep
+      p.sparkle(midTipX, midTipY, 3, '#ffffff', '#00e5ff');
+      p.rect(Math.round(prevTipX) - 1, Math.round(prevTipY) - 1, 3, 3, '#e0f7fa');
+      p.rect(Math.round(tipX) - 1, Math.round(tipY) - 2, 2, 4, '#29b6f6');
+    } else if (theme === 'crimson') {
+      // Jagged double-fang crimson shock arc & dark embers
+      const innerX = swordX + Math.sin(swordAngle + 0.35 * swingDir) * (bladeLen * 0.78);
+      const innerY = swordY - Math.cos(swordAngle + 0.35 * swingDir) * (bladeLen * 0.78);
+      p.line(prevTipX, prevTipY, innerX, innerY, '#ff1744', 2);
+      p.line(innerX, innerY, tipX, tipY, '#ff8a80', 2);
+      p.sparkle(tipX, tipY, 3, '#ffffff', '#ff1744');
+    } else if (theme === 'violet') {
+      // Twin phantom afterimage crescent & void sparkles
+      const echoAngle = swordAngle + 1.05 * swingDir;
+      const ex = swordX + Math.sin(echoAngle) * (bladeLen * 0.92);
+      const ey = swordY - Math.cos(echoAngle) * (bladeLen * 0.92);
+      p.line(ex, ey, prevTipX, prevTipY, '#d500f9', 2);
+      p.sparkle(midTipX, midTipY, 3, '#ffffff', '#ea80fc');
+    } else if (theme === 'gold') {
+      // Radiant sun-gold diamond star glints along the arc
+      p.sparkle(tipX, tipY, 4, '#ffffff', '#ffd54f');
+      p.sparkle(midTipX, midTipY, 2, '#fff59d', '#ffb300');
+    } else if (theme === 'emerald') {
+      // Surging jade shock-dots & emerald edge glint
+      p.line(prevTipX, prevTipY, tipX, tipY, '#69f0ae', 2);
+      p.sparkle(midTipX, midTipY, 3, '#ffffff', '#00e676');
+    } else {
+      // Classic tempered steel razor glint & fine white sparks
+      p.line(prevTipX, prevTipY, tipX, tipY, '#ffffff', 1);
+      p.px(Math.round(midTipX), Math.round(midTipY) - 2, '#ffffff');
+      p.px(Math.round(tipX) + swingDir * 2, Math.round(tipY), '#cfd8dc');
+    }
   }
 
   // Hilt & Crossguard

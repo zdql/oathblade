@@ -87,7 +87,7 @@ function drawVfxFrame(p: PixelCanvas, event: VfxAnimEvent, t: number, color: str
 
   switch (event) {
     case 'slash_arc': {
-      // 12-frame sweeping pixel crescent
+      // 12-frame sweeping pixel crescent with custom accents based on blade color!
       const startA = -2.2 + t * 1.4;
       const endA = startA + 1.8 * (1 - t * 0.5);
       const r = 16 + t * 5;
@@ -97,11 +97,33 @@ function drawVfxFrame(p: PixelCanvas, event: VfxAnimEvent, t: number, color: str
         p.rect(x - 1, y - 1, 3, 3, color);
         p.px(x, y, '#ffffff');
       }
+      // Color-driven signature accents
+      const cLow = color.toLowerCase();
+      const tipX = cx + Math.cos(endA) * r;
+      const tipY = cy + Math.sin(endA) * r * 0.72;
+      if (cLow.includes('ff6d') || cLow.includes('ff52') || cLow.includes('ff17')) {
+        // Flame / Crimson: trailing ember sparks
+        p.sparkle(tipX, tipY, Math.max(1, Math.round(4 * (1 - t))), '#fff59d', '#ff1744');
+        p.rect(Math.round(tipX) - 4, Math.round(tipY) - 4, 2, 2, '#ffab00');
+      } else if (cLow.includes('00e5') || cLow.includes('b3e5') || cLow.includes('29b6') || cLow.includes('80de')) {
+        // Frost / Gale Cyan: crystalline diamond shards
+        p.sparkle(tipX, tipY, Math.max(1, Math.round(4 * (1 - t))), '#ffffff', '#00e5ff');
+        p.rect(Math.round(cx + Math.cos(startA) * r), Math.round(cy + Math.sin(startA) * r * 0.72), 2, 2, '#e0f7fa');
+      } else if (cLow.includes('d500') || cLow.includes('e040') || cLow.includes('ea80') || cLow.includes('ce93')) {
+        // Phantom Violet: secondary ghost crescent
+        const rGhost = r - 5;
+        for (let a = startA; a <= endA; a += 0.22) {
+          p.px(cx + Math.cos(a) * rGhost, cy + Math.sin(a) * rGhost * 0.72, '#ea80fc');
+        }
+      } else if (cLow.includes('ffd') || cLow.includes('fff5') || cLow.includes('ffb')) {
+        // Sun-Gold: twin radiant star glints
+        p.sparkle(tipX, tipY, Math.max(1, Math.round(5 * (1 - t))), '#ffffff', '#ffd54f');
+      }
       break;
     }
 
     case 'heavy_cleave': {
-      // 16-frame blazing wide cleave + shockwave sparks
+      // 16-frame blazing wide cleave + color-driven shockwave sparks
       const r = 14 + t * 10;
       for (let a = -2.4; a <= 0.8; a += 0.1) {
         const x = cx + Math.cos(a) * r;
@@ -109,7 +131,13 @@ function drawVfxFrame(p: PixelCanvas, event: VfxAnimEvent, t: number, color: str
         p.rect(x - 2, y - 2, 4, 4, color);
         p.rect(x - 1, y - 1, 2, 2, '#ffffff');
       }
+      // Secondary outer aura wave tinted by sword color
+      const r2 = r + 4;
+      for (let a = -2.1; a <= 0.5; a += 0.25) {
+        p.px(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2 * 0.78, color);
+      }
       p.sparkle(cx + Math.round((t - 0.5) * 20), cy - 6, Math.round(5 * (1 - t)), '#ffffff', color);
+      p.sparkle(cx - Math.round((t - 0.5) * 16), cy + 4, Math.max(1, Math.round(3 * (1 - t))), '#ffffff', color);
       break;
     }
 
