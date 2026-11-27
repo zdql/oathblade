@@ -68,6 +68,7 @@ export type GameScreen =
   | 'victory_run'
   | 'run_summary'
   | 'sanctuary'
+  | 'minigame_portal'
   | 'minigame_arcade';
 
 export type PlayerActionState =
@@ -575,6 +576,16 @@ export class GameEngine {
     this.notifyUI();
   }
 
+  public openMinigamePortal(): void {
+    this.arcadeMode = false;
+    this.arcadeResult = null;
+    this.activeRoadMinigame = null;
+    this.screen = 'minigame_portal';
+    this.input.clearBuffers();
+    this.sound.playBossTelegraph();
+    this.notifyUI();
+  }
+
   public startPracticeMinigame(kind: RoadMinigameKind): void {
     const mg = createMinigameOfKind(kind, 0, true);
     mg.active = true;
@@ -592,7 +603,7 @@ export class GameEngine {
     this.arcadeMode = false;
     this.arcadeResult = null;
     this.activeRoadMinigame = null;
-    this.screen = 'sanctuary';
+    this.screen = 'minigame_portal';
     this.input.clearBuffers();
     this.notifyUI();
   }

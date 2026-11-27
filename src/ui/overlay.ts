@@ -25,7 +25,7 @@ import { FIGHTING_STYLES, getStyleUpgradeCost, type FightingStyleId } from '../g
 import { ALL_MINIGAME_KINDS, createMinigameOfKind, type RoadMinigameKind } from '../game/runContent';
 import type { TouchControls } from './touchControls';
 
-type SanctuaryTab = 'upgrades' | 'gear' | 'pets' | 'styles' | 'combos' | 'forge' | 'minigames';
+type SanctuaryTab = 'upgrades' | 'gear' | 'pets' | 'styles' | 'combos' | 'forge';
 
 export class UIOverlay {
   private container: HTMLElement;
@@ -73,6 +73,8 @@ export class UIOverlay {
       html += this.renderRunSummary(e.screen === 'victory_run');
     } else if (e.screen === 'sanctuary') {
       html += this.renderSanctuary();
+    } else if (e.screen === 'minigame_portal') {
+      html += this.renderMinigamePortal();
     } else if (e.screen === 'minigame_arcade') {
       html += this.renderMinigameArcadeOverlay();
     }
@@ -385,6 +387,7 @@ export class UIOverlay {
               : ''
           }
           <div class="btn-row">
+            <button class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#00e5ff,#69f0ae);color:#091318;" data-action="open-minigame-portal">🌀 Enter Minigame Portal</button>
             <button class="btn btn-secondary btn-sm" data-action="open-sanctuary">Retreat to Sanctuary Forge</button>
           </div>
         </div>
@@ -481,13 +484,56 @@ export class UIOverlay {
     });
   }
 
+  private renderMinigamePortal(): string {
+    const nextBoss = this.engine.gauntlet[this.engine.currentTierIndex + 1];
+    return `
+      <div class="overlay-screen">
+        <div class="card sanctuary-card" style="border-color:#00e5ff;box-shadow:0 0 38px rgba(0,229,255,0.22);">
+          <div class="sanctuary-top">
+            <div>
+              <div class="tape-tier" style="color:#80deea;">🌀 Post-Boss Bonus Portal • Just For Fun</div>
+              <div style="font-family:Georgia,serif;font-size:24px;color:#fff;">Minigame Portal (${ALL_MINIGAME_KINDS.length} Extended Games)</div>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;text-align:right;">
+              No rewards — pure fun!<br/>When done, move on or return to the Forge.
+            </div>
+          </div>
+
+          <div class="shop-scroll">
+            <div class="shop-grid">
+              ${ALL_MINIGAME_KINDS.map((kind) => {
+                const sample = createMinigameOfKind(kind, 0, true);
+                return `
+                  <div class="shop-item" style="border-color:rgba(0,229,255,0.3);">
+                    <div>
+                      <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">${Math.round(sample.maxTimer)}s • Fun</span></h4>
+                      <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <div class="btn-row" style="justify-content:space-between;margin-top:14px;">
+            <button class="btn btn-secondary" data-action="open-sanctuary">Go Back to Sanctuary Forge</button>
+            <button class="btn btn-primary" data-action="next-boss">
+              ${nextBoss ? `Move On → Tier ${nextBoss.template.tier} (${nextBoss.template.name})` : 'Move On → Claim Victory'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderMinigameArcadeOverlay(): string {
     const res = this.engine.arcadeResult;
     if (!res) return '';
     return `
       <div class="overlay-screen">
         <div class="card run-summary-card" style="text-align:center;max-width:520px;border-color:${res.won ? '#69f0ae' : '#ff8a80'};">
-          <div class="tape-tier" style="color:#80deea;">Sanctuary Minigames Arcade • Just For Fun</div>
+          <div class="tape-tier" style="color:#80deea;">🌀 Minigame Portal • Just For Fun</div>
           <div class="title-logo" style="font-size:32px;margin:6px 0;color:${res.won ? '#69f0ae' : '#ff8a80'};">
             ${res.won ? 'Minigame Cleared!' : "Time's Up!"}
           </div>
@@ -499,7 +545,7 @@ export class UIOverlay {
           </p>
           <div class="btn-row">
             <button class="btn btn-primary" data-play-arcade="${res.kind}">Play Again</button>
-            <button class="btn btn-secondary" data-action="exit-arcade">Back to Minigames</button>
+            <button class="btn btn-secondary" data-action="exit-arcade">Back to Minigame Portal</button>
           </div>
         </div>
       </div>
@@ -631,26 +677,6 @@ export class UIOverlay {
             .join('')}
         </div>
       `;
-    } else if (this.activeTab === 'minigames') {
-      bodyHtml = `
-        <div style="margin-bottom:10px;padding:10px 12px;border-radius:10px;background:rgba(128,222,234,0.1);border:1px solid rgba(128,222,234,0.35);font-size:12px;color:#e0f7fa;">
-          <strong>Sanctuary Minigames Arcade (${ALL_MINIGAME_KINDS.length} Games):</strong> Pick any minigame below to play immediately — <strong>no rewards, just for fun!</strong>
-        </div>
-        <div class="shop-grid">
-          ${ALL_MINIGAME_KINDS.map((kind) => {
-            const sample = createMinigameOfKind(kind, 0, true);
-            return `
-              <div class="shop-item" style="border-color:rgba(128,222,234,0.28);">
-                <div>
-                  <h4><span style="color:#80deea;">${sample.title}</span><span style="font-size:11px;color:#94a3b8;">${Math.round(sample.maxTimer)}s • Fun</span></h4>
-                  <p style="margin-top:4px;color:#cbd5e1;">${sample.instructions}</p>
-                </div>
-                <button class="btn btn-primary btn-sm" data-play-arcade="${kind}">Play Minigame</button>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
     } else {
       const preview = buildCustomCombo({
         name: this.draftName,
@@ -752,7 +778,6 @@ export class UIOverlay {
             <button class="tab-btn ${this.activeTab === 'styles' ? 'active' : ''}" data-tab="styles">Fighting Styles</button>
             <button class="tab-btn ${this.activeTab === 'combos' ? 'active' : ''}" data-tab="combos">Combos</button>
             <button class="tab-btn ${this.activeTab === 'forge' ? 'active' : ''}" data-tab="forge">Combo Forge</button>
-            <button class="tab-btn ${this.activeTab === 'minigames' ? 'active' : ''}" data-tab="minigames">Minigames</button>
           </div>
 
           <div class="shop-scroll">${bodyHtml}</div>
@@ -776,10 +801,8 @@ export class UIOverlay {
         else if (act === 'enter-raid') this.engine.enterAreaRaid();
         else if (act === 'decline-raid') this.engine.declineAreaRaid();
         else if (act === 'return-from-raid') this.engine.returnFromRaidToRoad();
-        else if (act === 'exit-arcade') {
-          this.activeTab = 'minigames';
-          this.engine.exitPracticeMinigame();
-        }
+        else if (act === 'open-minigame-portal') this.engine.openMinigamePortal();
+        else if (act === 'exit-arcade') this.engine.exitPracticeMinigame();
         else if (act === 'next-boss') this.engine.continuePathToNextBoss();
         else if (act === 'toggle-mute') {
           this.sound.muted = !this.sound.muted;

@@ -90,15 +90,17 @@ export class GameRenderer {
     } else {
       drawBiomeBackdrop(
         ctx,
-        engine.screen === 'sanctuary' || engine.screen === 'minigame_arcade' ? 'forest' : biome,
+        engine.screen === 'sanctuary' ? 'forest' : biome,
         this.width,
         this.height,
         this.clock,
         Math.sin(this.clock * 0.3) * 80,
         290
       );
-      if (engine.screen === 'sanctuary' || engine.screen === 'minigame_arcade') {
+      if (engine.screen === 'sanctuary') {
         this.renderSanctuaryCampfire();
+      } else if (engine.screen === 'minigame_portal' || engine.screen === 'minigame_arcade') {
+        this.renderMinigamePortalBackdrop();
       }
       if (engine.screen === 'minigame_arcade' && engine.activeRoadMinigame && engine.activeRoadMinigame.active) {
         this.renderRoadMinigame(engine);
@@ -163,6 +165,30 @@ export class GameRenderer {
     ctx.fillRect(cx - 12, cy - 24 - Math.round(flick * 0.6), 24, 22);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(cx - 5, cy - 14, 10, 10);
+  }
+
+  private renderMinigamePortalBackdrop(): void {
+    const ctx = this.ctx;
+    const cx = Math.floor(this.width * 0.5);
+    const cy = Math.floor(this.height * 0.5);
+    const pulse = Math.sin(this.clock * 3.5) * 16;
+
+    const grad = ctx.createRadialGradient(cx, cy, 30, cx, cy, 420 + pulse);
+    grad.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
+    grad.addColorStop(0.45, 'rgba(105, 240, 174, 0.16)');
+    grad.addColorStop(1, 'rgba(6, 10, 18, 0.88)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = i % 2 === 0 ? 'rgba(0, 229, 255, 0.28)' : 'rgba(255, 215, 64, 0.22)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 140 + i * 78 + Math.sin(this.clock * 2.5 + i) * 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private renderOverworldPath(engine: GameEngine, biome: typeof engine.gauntlet[0]['template']['biome']): void {
@@ -466,7 +492,7 @@ export class GameRenderer {
     ctx.textAlign = 'center';
     ctx.fillStyle = engine.arcadeMode ? '#80deea' : '#ffd54f';
     ctx.font = '800 13px system-ui, sans-serif';
-    const modeTag = engine.arcadeMode ? 'SANCTUARY ARCADE (JUST FOR FUN)' : 'ROADSIDE MINIGAME';
+    const modeTag = engine.arcadeMode ? 'MINIGAME PORTAL (JUST FOR FUN)' : 'ROADSIDE MINIGAME';
     ctx.fillText(`${modeTag}  •  TIME: ${Math.max(0, mg.maxTimer - mg.timer).toFixed(1)}s`, cx, cy - 104);
 
     ctx.fillStyle = '#ffffff';
